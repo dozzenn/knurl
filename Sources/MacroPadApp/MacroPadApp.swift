@@ -20,11 +20,7 @@ struct MacroPadApp: App {
                 .frame(minWidth: 940, minHeight: 620)
                 .background(WindowBackground())
                 .preferredColorScheme(.dark)
-                .onAppear {
-                    PaletteController.shared.attach(model)
-                    model.applyHotKey()
-                    model.applyActivationPolicy()
-                }
+                .onAppear { model.applyActivationPolicy() }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
@@ -47,9 +43,7 @@ struct MacroPadApp: App {
                 Divider()
                 Button("Import preset…") { model.importPreset() }
                 Button("Export preset…") { model.exportPreset() }
-                Divider()
-                Button("Command palette") { PaletteController.shared.toggle() }
-                    .keyboardShortcut("k", modifiers: [.command, .option, .control])
+
             }
         }
 

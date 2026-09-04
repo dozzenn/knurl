@@ -447,36 +447,23 @@ private struct WebHubBacklightEditor: View {
     var body: some View {
         SectionLabel(text: "Effect")
 
-        VStack(spacing: 1) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                  spacing: 8) {
             ForEach(Array(BacklightState.modeNames.enumerated()), id: \.offset) { index, name in
-                Row(title: name,
-                    icon: index == 0 ? "lightbulb.slash" : "lightbulb.fill",
-                    selected: model.backlight.mode == UInt8(index),
-                    action: {
-                        model.backlight.mode = UInt8(index)
-                        model.applyBacklight()
-                    }) {
-                    if model.backlight.mode == UInt8(index) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.accent)
-                    }
+                EffectTile(title: name,
+                           mode: index,
+                           selected: model.backlight.mode == UInt8(index),
+                           colour: model.backlight.color == 1
+                               ? Color(hue: Double(model.backlight.hue) / 255, saturation: 0.85, brightness: 1)
+                               : nil) {
+                    model.backlight.mode = UInt8(index)
+                    model.applyBacklight()
                 }
             }
         }
+        .padding(.horizontal, 3)
 
         if !model.backlight.isOff {
-            LabeledSlider(title: "Brightness",
-                          readout: "\(model.backlight.brightness)",
-                          value: Binding(
-                            get: { Double(model.backlight.brightness) },
-                            set: { model.backlight.brightness = UInt8($0.rounded()) }
-                          ),
-                          range: 0...Double(BacklightState.maxBrightness),
-                          ticks: Int(BacklightState.maxBrightness) + 1) {
-                model.applyBacklight()
-            }
-
             if model.backlight.usesSpeed {
                 LabeledSlider(title: "Speed",
                               readout: "\(model.backlight.speed)",
@@ -545,8 +532,7 @@ private struct LabeledSlider: View {
             }
             .padding(.horizontal, 3)
 
-            GlassSlider(value: $value, range: range, ticks: ticks,
-                        tint: Theme.wedge, onCommit: onCommit)
+            GlassSlider(value: $value, range: range, ticks: ticks, onCommit: onCommit)
                 .padding(.horizontal, 3)
         }
         .padding(.top, 12)

@@ -28,9 +28,6 @@ enum Theme {
     static let accent      = Color(red: 1.00, green: 0.39, blue: 0.39)   // signal red
     static let online      = Color(red: 0.20, green: 0.84, blue: 0.29)
     static let warning     = Color(red: 1.00, green: 0.72, blue: 0.30)
-    /// The instrument yellow used for value handles, so a control that sets a
-    /// number never reads as a control that performs an action.
-    static let wedge       = Color(red: 1.00, green: 0.84, blue: 0.10)
 
     /// Sits behind the blurred material so the window keeps its weight over a
     /// bright desktop.
@@ -403,14 +400,13 @@ struct PopoverBackground: View {
 /// A slider you feel rather than read.
 ///
 /// Tracks the pointer 1:1 from the moment it goes down — no animation on the
-/// drag itself, because the value has to sit under the finger. The travelled
-/// part is a solid line and the rest is a dotted trail, so the remaining range
-/// reads as "not yet there" rather than as a second, dimmer bar.
+/// drag itself, because the value must sit under the finger. The knob grows
+/// slightly while held, which is the only cue that needs motion.
 struct GlassSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double> = 0...1
-    /// Dots drawn along the untravelled part of the track.
-    var ticks: Int = 12
+    /// Number of tick dots under the track; 0 hides them.
+    var ticks: Int = 0
     var tint: Color = Theme.accent
     var onCommit: (() -> Void)?
 
@@ -423,71 +419,60 @@ struct GlassSlider: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let knobW: CGFloat = 14
+        VStack(spacing: 8) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let knob: CGFloat = dragging ? 20 : 17
 
-            ZStack(alignment: .leading) {
-                // Dotted trail for the part not reached yet.
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.black.opacity(0.28))
+                        .frame(height: 7)
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.07), lineWidth: 1))
+
+                    Capsule()
+                        .fill(LinearGradient(colors: [tint.opacity(0.75), tint],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(7, w * fraction), height: 7)
+
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: knob, height: knob)
+                        .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.45), radius: dragging ? 5 : 3, y: 1)
+                        .offset(x: (w - knob) * fraction)
+                }
+                .frame(height: 22)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in
+                            dragging = true
+                            let usable = max(1, w - knob)
+                            let f = min(1, max(0, (g.location.x - knob / 2) / usable))
+                            value = range.lowerBound + f * (range.upperBound - range.lowerBound)
+                        }
+                        .onEnded { _ in
+                            dragging = false
+                            onCommit?()
+                        }
+                )
+            }
+            .frame(height: 22)
+
+            if ticks > 1 {
                 HStack(spacing: 0) {
-                    ForEach(0..<max(2, ticks), id: \.self) { i in
+                    ForEach(0..<ticks, id: \.self) { i in
                         Circle()
-                            .fill(Theme.textFaint.opacity(dotOpacity(i)))
-                            .frame(width: 3, height: 3)
-                        if i < max(2, ticks) - 1 { Spacer(minLength: 0) }
+                            .fill(Theme.textFaint.opacity(0.55))
+                            .frame(width: 2.5, height: 2.5)
+                        if i < ticks - 1 { Spacer(minLength: 0) }
                     }
                 }
-                .padding(.horizontal, knobW / 2)
-
-                // Travelled line.
-                Capsule()
-                    .fill(tint)
-                    .frame(width: max(2, (w - knobW) * fraction + knobW / 2), height: 2)
-
-                // A wedge rather than a puck: it points at the value it marks.
-                Triangle()
-                    .fill(tint)
-                    .frame(width: knobW, height: knobW * 0.86)
-                    .shadow(color: tint.opacity(dragging ? 0.65 : 0.3),
-                            radius: dragging ? 6 : 3)
-                    .scaleEffect(dragging ? 1.18 : 1, anchor: .center)
-                    .offset(x: (w - knobW) * fraction)
+                .padding(.horizontal, 8)
             }
-            .frame(height: 26)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { g in
-                        dragging = true
-                        let usable = max(1, w - knobW)
-                        let f = min(1, max(0, (g.location.x - knobW / 2) / usable))
-                        value = range.lowerBound + f * (range.upperBound - range.lowerBound)
-                    }
-                    .onEnded { _ in
-                        dragging = false
-                        onCommit?()
-                    }
-            )
         }
-        .frame(height: 26)
         .animation(Theme.press, value: dragging)
-    }
-
-    private func dotOpacity(_ i: Int) -> Double {
-        let position = Double(i) / Double(max(1, max(2, ticks) - 1))
-        return position <= fraction ? 0.18 : 0.75
-    }
-}
-
-/// The wedge used as a slider handle.
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.closeSubpath()
-        return p
     }
 }
 
@@ -541,5 +526,162 @@ struct HueBand: View {
         }
         .frame(height: 30)
         .animation(Theme.press, value: dragging)
+    }
+}
+
+// MARK: - Texture
+
+/// A halftone dot field, drawn rather than shipped as an image so it scales and
+/// tints with whatever it sits on. Used sparingly — it is a surface treatment,
+/// not decoration.
+struct DotField: View {
+    var spacing: CGFloat = 5
+    var radius: CGFloat = 1
+    var color: Color = .white
+    var opacity: Double = 0.16
+
+    var body: some View {
+        Canvas { context, size in
+            let dot = Path(ellipseIn: CGRect(x: 0, y: 0, width: radius * 2, height: radius * 2))
+            var y: CGFloat = spacing / 2
+            while y < size.height {
+                var x: CGFloat = spacing / 2
+                while x < size.width {
+                    context.translateBy(x: x, y: y)
+                    context.fill(dot, with: .color(color.opacity(opacity)))
+                    context.translateBy(x: -x, y: -y)
+                    x += spacing
+                }
+                y += spacing
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// A tile that looks like the thing it selects, so the list of effects can be
+/// read at a glance instead of word by word.
+struct EffectTile: View {
+    let title: String
+    let mode: Int
+    let selected: Bool
+    /// The colour the effect is currently set to run in, or nil for the palette.
+    var colour: Color?
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomLeading) {
+                preview
+                if mode == 5 {
+                    DotField(spacing: 6, radius: 1.1, color: .white, opacity: 0.22)
+                }
+                LinearGradient(colors: [.clear, .black.opacity(0.55)],
+                               startPoint: .center, endPoint: .bottom)
+                Text(title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 2)
+                    .padding(9)
+            }
+            .frame(height: 62)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(selected ? Color.white.opacity(0.85) : Color.white.opacity(hovering ? 0.2 : 0.09),
+                                  lineWidth: selected ? 2 : 1)
+            )
+            .shadow(color: selected ? (colour ?? Theme.accent).opacity(0.35) : .black.opacity(0.3),
+                    radius: selected ? 9 : 4, y: 2)
+        }
+        .buttonStyle(PressableStyle(scale: 0.98))
+        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+    }
+
+    private var band: [Color] {
+        if let colour { return [colour, colour] }
+        return (0...6).map { Color(hue: Double($0) / 6, saturation: 0.8, brightness: 1) }
+    }
+
+    @ViewBuilder
+    private var preview: some View {
+        switch mode {
+        case 0:
+            LinearGradient(colors: [Color(white: 0.16), Color(white: 0.09)],
+                           startPoint: .top, endPoint: .bottom)
+        case 1:
+            LinearGradient(colors: band, startPoint: .leading, endPoint: .trailing)
+        case 2:
+            LinearGradient(colors: [(colour ?? .purple).opacity(0.12), colour ?? .purple],
+                           startPoint: .bottom, endPoint: .top)
+        case 3:
+            HStack(spacing: 0) {
+                ForEach(0..<6, id: \.self) { i in
+                    (i.isMultiple(of: 2) ? (colour ?? Color.indigo) : Color(white: 0.10))
+                }
+            }
+        case 4:
+            LinearGradient(colors: band + band.reversed(),
+                           startPoint: .leading, endPoint: .trailing)
+        default:
+            LinearGradient(colors: [Color(red: 0.32, green: 0.22, blue: 0.62),
+                                    Color(red: 0.62, green: 0.26, blue: 0.72)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+}
+
+// MARK: - Dot matrix numerals
+
+/// Numbers drawn as a dot field rather than set in a typeface.
+///
+/// A count is a readout from a device, not prose, and drawing it the way an
+/// instrument would keeps it from being mistaken for interface text.
+struct DotMatrixNumber: View {
+    let text: String
+    var dot: CGFloat = 3
+    var gap: CGFloat = 1.5
+    var color: Color = Theme.text
+
+    private static let glyphs: [Character: [String]] = [
+        "0": ["111", "101", "101", "101", "111"],
+        "1": ["010", "110", "010", "010", "111"],
+        "2": ["111", "001", "111", "100", "111"],
+        "3": ["111", "001", "111", "001", "111"],
+        "4": ["101", "101", "111", "001", "001"],
+        "5": ["111", "100", "111", "001", "111"],
+        "6": ["111", "100", "111", "101", "111"],
+        "7": ["111", "001", "001", "001", "001"],
+        "8": ["111", "101", "111", "101", "111"],
+        "9": ["111", "101", "111", "001", "111"],
+        ",": ["000", "000", "000", "010", "100"],
+        ".": ["000", "000", "000", "000", "010"],
+        "%": ["101", "001", "010", "100", "101"],
+        "-": ["000", "000", "111", "000", "000"],
+        " ": ["000", "000", "000", "000", "000"],
+    ]
+
+    private var pitch: CGFloat { dot + gap }
+
+    var body: some View {
+        Canvas { context, _ in
+            var originX: CGFloat = 0
+            for character in text {
+                let rows = Self.glyphs[character] ?? Self.glyphs[" "]!
+                for (r, row) in rows.enumerated() {
+                    for (c, bit) in row.enumerated() where bit == "1" {
+                        let rect = CGRect(x: originX + CGFloat(c) * pitch,
+                                          y: CGFloat(r) * pitch,
+                                          width: dot, height: dot)
+                        context.fill(Path(ellipseIn: rect), with: .color(color))
+                    }
+                }
+                originX += 3 * pitch + gap * 2
+            }
+        }
+        .frame(width: CGFloat(text.count) * (3 * pitch + gap * 2),
+               height: 5 * pitch - gap)
     }
 }

@@ -1,134 +1,127 @@
 import SwiftUI
 import MacroPadCore
 
-/// The escape hatch for firmware differences. Nothing here is needed on a
-/// device the app already recognises, so it lives one level down — but when a
-/// pad ignores uploads, this is the whole fix, so it stays plain and ordered
-/// the way you would try things.
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("General")
-                .font(.system(size: 15, weight: .semibold))
-                .tracking(-0.2)
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 16)
-                .padding(.top, 18)
-                .padding(.bottom, 8)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsHeading("General")
 
-            VStack(spacing: 1) {
-                SettingRow(title: "Command palette shortcut",
-                           detail: "Opens the palette from any app") {
-                    HStack(spacing: 8) {
-                        ShortcutHint(keys: model.hotKeyDisplay, emphasized: model.hotKeyEnabled)
-                        Toggle("", isOn: $model.hotKeyEnabled)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
+                VStack(spacing: 1) {
+                    SettingRow(title: "Open at login",
+                               detail: "Start MacroPad when you log in") {
+                        Toggle("", isOn: Binding(get: { model.launchAtLogin },
+                                                 set: { model.setLaunchAtLogin($0) }))
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
+                    SettingRow(title: "Menu bar only",
+                               detail: "Hide the Dock icon and live in the menu bar") {
+                        Toggle("", isOn: $model.hideDockIcon)
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
+                    SettingRow(title: "Count presses",
+                               detail: "Watches only this keypad and tallies each key") {
+                        Toggle("", isOn: $model.statsEnabled)
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
                     }
                 }
-                SettingRow(title: "Open at login",
-                           detail: "Start MacroPad when you log in") {
-                    Toggle("", isOn: Binding(
-                        get: { model.launchAtLogin },
-                        set: { model.setLaunchAtLogin($0) }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-                SettingRow(title: "Menu bar only",
-                           detail: "Hide the Dock icon and live in the menu bar") {
-                    Toggle("", isOn: $model.hideDockIcon)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                }
-            }
-            .padding(.horizontal, 10)
+                .padding(.horizontal, 10)
 
-            Divider().background(Theme.hairline).padding(.vertical, 14)
-
-            Text("Protocol")
-                .font(.system(size: 15, weight: .semibold))
-                .tracking(-0.2)
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 16)
-                .padding(.top, 18)
-                .padding(.bottom, 4)
-
-            Text("Try these in order if uploads are accepted but the pad does not change.")
-                .font(Theme.caption)
-                .foregroundStyle(Theme.textFaint)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-
-            VStack(spacing: 1) {
-                SettingRow(title: "Frame format", detail: "How a mapping is packed into a report") {
-                    Picker("", selection: Binding(
-                        get: { model.protocolOverride },
-                        set: { model.protocolOverride = $0 }
-                    )) {
-                        Text("Auto").tag(PadProtocol?.none)
-                        ForEach(PadProtocol.allCases, id: \.self) { p in
-                            Text(p.displayName).tag(PadProtocol?.some(p))
+                if model.statsEnabled {
+                    HStack(spacing: 14) {
+                        DotMatrixNumber(text: "\(model.totalPresses)", dot: 4, gap: 2,
+                                        color: Theme.accent)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("presses on this keypad")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Theme.textMuted)
+                            Text("counted from its own keyboard interface, nothing else")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Theme.textFaint)
                         }
+                        Spacer()
+                        BarAction(title: "Reset") { model.resetStats() }
                     }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(width: 150)
+                    .padding(.horizontal, 19)
+                    .padding(.top, 16)
                 }
 
-                SettingRow(title: "Channel", detail: "Output reports suit most firmware") {
-                    Picker("", selection: $model.channel) {
-                        ForEach(ReportChannel.allCases, id: \.self) { c in
-                            Text(c.displayName).tag(c)
-                        }
-                    }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(width: 150)
-                }
+                Divider().background(Theme.hairline).padding(.vertical, 16)
 
-                SettingRow(title: "Report id", detail: "0 when the descriptor declares none") {
-                    Picker("", selection: $model.reportId) {
-                        ForEach([UInt8(0), 2, 3], id: \.self) { Text("\($0)").tag($0) }
-                    }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(width: 150)
-                }
-
-                SettingRow(title: "Media encoding", detail: "Firmware revisions disagree here") {
-                    Picker("", selection: $model.mediaEncoding) {
-                        ForEach(MediaEncoding.allCases, id: \.self) { e in
-                            Text(e.displayName).tag(e)
-                        }
-                    }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(width: 150)
-                }
-            }
-            .padding(.horizontal, 10)
-
-            Divider().background(Theme.hairline).padding(.vertical, 14)
-
-            HStack(spacing: 8) {
-                BarAction(title: "Probe report ids", prominent: true) { model.probeReportIds() }
-                Text("Writes an empty frame on each id and reports which ones the device takes.")
+                SettingsHeading("Protocol")
+                Text("Try these in order if saving is accepted but the keypad does not change.")
                     .font(Theme.caption)
                     .foregroundStyle(Theme.textFaint)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 16)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
 
-            Spacer(minLength: 16)
+                VStack(spacing: 1) {
+                    SettingRow(title: "Frame format",
+                               detail: "How a mapping is packed into a report") {
+                        Picker("", selection: Binding(get: { model.protocolOverride },
+                                                      set: { model.protocolOverride = $0 })) {
+                            Text("Auto").tag(PadProtocol?.none)
+                            ForEach(PadProtocol.allCases, id: \.self) { p in
+                                Text(p.displayName).tag(PadProtocol?.some(p))
+                            }
+                        }
+                        .labelsHidden().controlSize(.small).frame(width: 160)
+                    }
+                    SettingRow(title: "Channel",
+                               detail: "Output reports suit most firmware") {
+                        Picker("", selection: $model.channel) {
+                            ForEach(ReportChannel.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .labelsHidden().controlSize(.small).frame(width: 160)
+                    }
+                    SettingRow(title: "Report id",
+                               detail: "0 when the descriptor declares none") {
+                        Picker("", selection: $model.reportId) {
+                            ForEach([UInt8(0), 2, 3], id: \.self) { Text("\($0)").tag($0) }
+                        }
+                        .labelsHidden().controlSize(.small).frame(width: 160)
+                    }
+                    SettingRow(title: "Media encoding",
+                               detail: "Firmware revisions disagree here") {
+                        Picker("", selection: $model.mediaEncoding) {
+                            ForEach(MediaEncoding.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .labelsHidden().controlSize(.small).frame(width: 160)
+                    }
+                }
+                .padding(.horizontal, 10)
+
+                HStack(spacing: 10) {
+                    BarAction(title: "Probe report ids", prominent: true) { model.probeReportIds() }
+                    Text("Writes an empty frame on each id and reports which ones the device takes.")
+                        .font(Theme.caption)
+                        .foregroundStyle(Theme.textFaint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 20)
+            }
         }
-        .frame(width: 500, height: 560)
+        .frame(width: 520, height: 560)
+    }
+}
+
+private struct SettingsHeading: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 15, weight: .semibold))
+            .tracking(-0.2)
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 8)
     }
 }
 
@@ -151,6 +144,6 @@ private struct SettingRow<Control: View>: View {
             control
         }
         .padding(.horizontal, 9)
-        .frame(height: 44)
+        .frame(height: 46)
     }
 }

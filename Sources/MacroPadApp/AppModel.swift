@@ -173,6 +173,8 @@ final class AppModel: ObservableObject {
         scopes = scopeStore.scopes
         profile = scopeStore.profile(for: currentScopeKey)
         if autoSwitchEnabled { startWatchingApps() }
+        loadCounts()
+        if statsEnabled { startCounting() }
         transport.startMonitoring()
         deviceListChanged()
         loadEditor()
@@ -216,6 +218,7 @@ final class AppModel: ObservableObject {
             adoptLayoutForSelection()
             setStatus("Connected — \(displayName(for: candidate)), \(activeProtocol.displayName)")
             syncFromDevice()
+            if statsEnabled { stopCounting(); startCounting() }
         case .failure(let error):
             isConnected = false
             setStatus(error.localizedDescription, error: true)
@@ -576,14 +579,103 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: - Menu bar and hot key
+    // MARK: - Stats
 
-    @Published var hotKeyEnabled: Bool = UserDefaults.standard.object(forKey: "hotKeyEnabled") as? Bool ?? true {
+    /// Counts presses on the keypad itself — not everything you type.
+    ///
+    /// The pad's own keyboard interface is watched and each press is attributed
+    /// back to the control that produced it by matching the report against the
+    /// mappings currently loaded. Off by default; it is a nicety, not a reason
+    /// to have the app listening.
+    @Published var statsEnabled: Bool = UserDefaults.standard.bool(forKey: "statsEnabled") {
         didSet {
-            UserDefaults.standard.set(hotKeyEnabled, forKey: "hotKeyEnabled")
-            applyHotKey()
+            UserDefaults.standard.set(statsEnabled, forKey: "statsEnabled")
+            statsEnabled ? startCounting() : stopCounting()
         }
     }
+
+    /// InputAction raw value → presses.
+    @Published private(set) var pressCounts: [UInt8: Int] = [:]
+
+    private var statsTransport: PadTransport?
+    private var lastKeyboardReport: [UInt8] = []
+
+    var totalPresses: Int { pressCounts.values.reduce(0, +) }
+
+    func presses(for action: InputAction) -> Int { pressCounts[action.rawValue] ?? 0 }
+
+    func resetStats() {
+        pressCounts = [:]
+        persistCounts()
+    }
+
+    private func persistCounts() {
+        let raw = pressCounts.reduce(into: [String: Int]()) { $0["\($1.key)"] = $1.value }
+        UserDefaults.standard.set(raw, forKey: "pressCounts")
+    }
+
+    private func loadCounts() {
+        guard let raw = UserDefaults.standard.dictionary(forKey: "pressCounts") as? [String: Int] else { return }
+        pressCounts = raw.reduce(into: [UInt8: Int]()) {
+            if let k = UInt8($1.key) { $0[k] = $1.value }
+        }
+    }
+
+    private func startCounting() {
+        guard statsTransport == nil, let candidate = selectedCandidate else { return }
+        let transport = PadTransport()
+        transport.startMonitoring()
+
+        // The pad's plain keyboard interface, not the configuration one.
+        guard let keyboard = transport.allInterfaces.first(where: {
+            $0.vendorId == candidate.vendorId && $0.productId == candidate.productId
+                && $0.usagePage == 0x01 && $0.maxInputReportSize == 8
+        }) else { return }
+
+        transport.onInputReport = { [weak self] bytes in
+            Task { @MainActor in self?.countReport(bytes) }
+        }
+        if case .success = transport.open(keyboard) {
+            statsTransport = transport
+        }
+    }
+
+    private func stopCounting() {
+        statsTransport?.close()
+        statsTransport = nil
+    }
+
+    /// A boot keyboard report is `[modifiers, 0, k1…k6]`. A usage that was not
+    /// in the previous report is a fresh press.
+    private func countReport(_ bytes: [UInt8]) {
+        guard bytes.count >= 3 else { return }
+        let modifiers = Modifier(rawValue: bytes[0])
+        let usages = Set(bytes.dropFirst(2).filter { $0 != 0 })
+        let previous = Set(lastKeyboardReport.count >= 3
+                           ? lastKeyboardReport.dropFirst(2).filter { $0 != 0 } : [])
+        lastKeyboardReport = bytes
+
+        for usage in usages.subtracting(previous) {
+            guard let action = action(matching: usage, modifiers: modifiers) else { continue }
+            pressCounts[action.rawValue, default: 0] += 1
+        }
+        persistCounts()
+    }
+
+    private func action(matching usage: UInt8, modifiers: Modifier) -> InputAction? {
+        for control in layout.controls {
+            for action in control.actions {
+                if case .keys(let sequence, _) = profile[layer, action],
+                   let first = sequence.first,
+                   first.usage == usage, first.modifiers == modifiers {
+                    return action
+                }
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Dock icon
 
     @Published var hideDockIcon: Bool = UserDefaults.standard.bool(forKey: "hideDockIcon") {
         didSet {
@@ -592,89 +684,8 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private var hotKey: GlobalHotKey?
-
-    /// Registered late enough that a failure (another app already owns the
-    /// combination) can be reported instead of silently doing nothing.
-    func applyHotKey() {
-        hotKey = nil
-        guard hotKeyEnabled else { return }
-        hotKey = GlobalHotKey(.default) {
-            PaletteController.shared.toggle()
-        }
-        if hotKey == nil {
-            setStatus("Could not register ⌃⌥⌘K — another app is already using it", error: true)
-        }
-    }
-
     func applyActivationPolicy() {
         NSApp.setActivationPolicy(hideDockIcon ? .accessory : .regular)
-    }
-
-    var hotKeyDisplay: [String] { GlobalHotKey.Combination.default.display }
-
-    // MARK: - Command palette
-
-    /// Everything the palette can run. Profiles come first because switching
-    /// the whole keypad in one keystroke is the reason the palette exists.
-    var paletteCommands: [PaletteCommand] {
-        var out: [PaletteCommand] = []
-
-        for scope in scopes {
-            out.append(PaletteCommand(
-                id: "scope:\(scope.key)",
-                title: scope.name,
-                subtitle: scope.key == liveScopeKey ? "already on the keypad" : "write these keys to the keypad",
-                icon: scope.isGlobal ? "globe" : "app",
-                group: "Key sets",
-                run: { [weak self] in self?.load(scope) }
-            ))
-        }
-
-        out.append(PaletteCommand(
-            id: "save.all",
-            title: "Save to keypad",
-            subtitle: "write every mapping in this profile",
-            icon: "arrow.down.circle",
-            group: "Actions",
-            keys: ["⌘", "S"],
-            run: { [weak self] in self?.saveToKeyboard() }
-        ))
-        out.append(PaletteCommand(
-            id: "device.toggle",
-            title: isConnected ? "Disconnect keypad" : "Connect keypad",
-            subtitle: isConnected ? deviceLabel : "look for a keypad and open it",
-            icon: isConnected ? "cable.connector.slash" : "cable.connector",
-            group: "Actions",
-            run: { [weak self] in
-                guard let self else { return }
-                self.isConnected ? self.disconnect() : self.connect()
-            }
-        ))
-        out.append(PaletteCommand(
-            id: "window.open",
-            title: "Open MacroPad",
-            subtitle: "the full editor",
-            icon: "macwindow",
-            group: "Actions",
-            run: { NSApp.activate(ignoringOtherApps: true)
-                   NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil) }
-        ))
-        out.append(PaletteCommand(
-            id: "preset.import",
-            title: "Import preset…",
-            icon: "square.and.arrow.down",
-            group: "Presets",
-            run: { [weak self] in self?.importPreset() }
-        ))
-        out.append(PaletteCommand(
-            id: "preset.export",
-            title: "Export preset…",
-            icon: "square.and.arrow.up",
-            group: "Presets",
-            run: { [weak self] in self?.exportPreset() }
-        ))
-        return out
     }
 
     // MARK: - Scopes: global, and one per app

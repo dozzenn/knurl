@@ -116,6 +116,7 @@ private struct ControlView: View {
                        subtitle: model.binding(for: action).summary,
                        selected: model.selectedAction == action,
                        mapped: model.binding(for: action).isSet,
+                       presses: model.statsEnabled ? model.presses(for: action) : nil,
                        size: CGSize(width: control.position.width * scale,
                                     height: control.position.height * scale))
                 .onTapGesture { model.selectedAction = action }
@@ -135,6 +136,8 @@ private struct ButtonFace: View {
     let subtitle: String
     let selected: Bool
     let mapped: Bool
+    /// Presses on this key, when counting is on.
+    var presses: Int?
     let size: CGSize
 
     @State private var hovering = false
@@ -177,6 +180,15 @@ private struct ButtonFace: View {
                 .strokeBorder(selected ? Theme.accent : Theme.hairline,
                               lineWidth: selected ? 1.5 : 1)
         )
+        .overlay(alignment: .topTrailing) {
+            if let presses, presses > 0 {
+                DotMatrixNumber(text: "\(presses)",
+                                dot: max(1.2, size.height * 0.022),
+                                gap: max(0.7, size.height * 0.012),
+                                color: Theme.textFaint)
+                    .padding(max(4, size.height * 0.07))
+            }
+        }
         .overlay(alignment: .top) {
             // Bright top edge — the material catching light from above.
             RoundedRectangle(cornerRadius: radius, style: .continuous)

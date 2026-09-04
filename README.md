@@ -12,8 +12,8 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
   editing, screenshots, browser tabs
 * Global keys plus per-app overrides — the keypad follows whichever app is in front
 
-* Lives in the menu bar, with a command palette on ⌃⌥⌘K for switching profiles
-  from any app without opening the window
+* Lives in the menu bar, with one-click switching between key sets
+* Optional press counts, tallied per key from the keypad's own interface
 
 * Auto-detects the pad's vendor-defined HID configuration interface
 * Maps each button and each knob action (turn left / press / turn right) to:
@@ -21,8 +21,7 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
   * a **media key** (play/pause, volume, and more)
   * a **mouse action** (clicks, scroll) with held modifiers
 * Multi-layer support on devices that have layers
-* Backlight: effect, brightness, speed and colour, read from the keypad and
-  written back live
+* Backlight: effect, speed and colour, read from the keypad and written back live
 * Per-control upload, or upload the whole profile at once
 * Profiles saved as JSON
 * A live HID log showing the exact bytes on the wire
@@ -92,34 +91,18 @@ Connecting reads the key table off the keypad, but only *adopts* it into a scope
 that is still empty — once you have set keys, your work outranks whatever the
 pad happens to be carrying.
 
-## Menu bar and the command palette
+## Menu bar
 
-The menu bar icon shows whether a keypad is connected and switches profiles in
-one click. **⌃⌥⌘K** opens a command palette from any app: type a profile name and
-press Return to load it onto the keypad, or search for save, connect, import and
-export. Both the shortcut and the Dock icon can be turned off in Settings, so the
-app can live in the menu bar alone.
+The menu bar item shows whether a keypad is connected and writes any key set to
+it in one click. The Dock icon can be turned off in Settings so the app lives in
+the menu bar alone.
 
-The shortcut is registered through Carbon's `RegisterEventHotKey`, which needs no
-Accessibility or Input Monitoring permission — the palette works from first
-launch. If another app already owns the combination, registration fails and the
-app says so rather than going quiet.
+## Press counts
 
-## If uploads are accepted but nothing changes
-
-These pads come in two protocol families and the difference is not detectable
-from the descriptor, so the app makes a best guess and lets you correct it.
-Open **Settings** (⌘,) and try, in order:
-
-1. **Frame format** — switch between Extended and Legacy
-2. **Channel** — switch between Output report and Feature report
-3. **Report id** — 0 for devices whose descriptor declares no report ids,
-   otherwise 2 or 3
-
-Turn on the HID log at the bottom of the window to watch what is sent. A `→`
-line in red means macOS rejected the write; a red-free line that changes nothing
-means the device took the frame but did not understand it, which is the signal
-to try the next setting above.
+Counting is off by default. When on, the app opens the keypad's own keyboard
+interface and attributes each press back to the control that produced it by
+matching the report against the mappings currently loaded — it watches that one
+device, not everything you type. Counts appear as a small tally on each key.
 
 ## Protocol notes
 
@@ -164,8 +147,10 @@ Backlight is one read/write block: `06 0A` reads it, and
 `06 0B 0B 00 00 <type> 00 <mode> <brightness> <speed> <direction> <color> 00 <h> <s> <v>`
 writes it. `color` is a flag — `0` runs the palette and ignores the hue, `1`
 uses the `h`/`s`/`v` triple. Effects are 0 off, 1 solid, 2 breathing, 3 blink,
-4 tide, 5 custom. Brightness and speed are **0–4**: the firmware stores a 5
-without complaint but then behaves erratically, so the app does not offer one.
+4 tide, 5 custom. Speed is **0–4**: the firmware stores a 5 without complaint
+but then behaves erratically, so the app does not offer one. The brightness byte
+is written and read back faithfully but has no visible effect on the
+SIDE-KEYBOARD, so the app does not offer a control for it.
 
 The app reads the key table and the backlight off the keypad whenever it
 connects, so the window shows what the hardware actually holds instead of an

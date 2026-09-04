@@ -28,11 +28,6 @@ struct MenuBarPanel: View {
 
             Divider().background(Theme.hairline).padding(.vertical, 6)
 
-            Row(title: "Command palette", icon: "command") {
-                PaletteController.shared.open()
-            } trailing: {
-                ShortcutHint(keys: model.hotKeyDisplay)
-            }
             Row(title: "Save to keypad", icon: "arrow.down.circle") {
                 model.saveToKeyboard()
             } trailing: {

@@ -1,5 +1,5 @@
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 /// What the selected control does. One column of panels, so the eye goes
 /// straight to the shortcut and everything else is subordinate to it.

@@ -1,5 +1,5 @@
 import Foundation
-import MacroPadCore
+import KnurlCore
 import IOKit.hid
 
 // Small diagnostic CLI: lists candidate configuration interfaces and can send
@@ -66,7 +66,7 @@ case "send":
           let actionRaw = UInt8(args[4]), let action = InputAction(rawValue: actionRaw),
           let layer = UInt8(args[5]),
           let usage = UInt8(args[6], radix: 16) else {
-        print("usage: macropad-probe send <legacy|extended> <reportId> <output|feature> <action> <layer> <hexUsage> [modByte]")
+        print("usage: knurl-probe send <legacy|extended> <reportId> <output|feature> <action> <layer> <hexUsage> [modByte]")
         exit(2)
     }
     let mods = Modifier(rawValue: args.count > 7 ? (UInt8(args[7]) ?? 0) : 0)
@@ -90,7 +90,7 @@ case "raw":
     // raw <reportId> <channel> <hex bytes...>
     guard args.count >= 4, let reportId = UInt8(args[1]),
           let channel = ReportChannel(rawValue: args[2]) else {
-        print("usage: macropad-probe raw <reportId> <output|feature> <hex bytes...>"); exit(2)
+        print("usage: knurl-probe raw <reportId> <output|feature> <hex bytes...>"); exit(2)
     }
     let bytes = args.dropFirst(3).compactMap { UInt8($0, radix: 16) }
     guard let best = transport.bestCandidate else { print("No device."); exit(1) }
@@ -210,7 +210,7 @@ case "setkey":
           let c1 = UInt8(args[4], radix: 16),
           let c2 = UInt8(args[5], radix: 16),
           let c3 = UInt8(args[6], radix: 16) else {
-        print("usage: macropad-probe setkey <index> <layer> <type> <c1hex> <c2hex> <c3hex>")
+        print("usage: knurl-probe setkey <index> <layer> <type> <c1hex> <c2hex> <c3hex>")
         exit(2)
     }
     guard let best = transport.bestCandidate else { print("No device."); exit(1) }
@@ -298,7 +298,7 @@ case "sniff":
     // and prints input reports, so we can see exactly what a pad key emits.
     guard args.count >= 3,
           let vid = UInt16(args[1], radix: 16), let pid = UInt16(args[2], radix: 16) else {
-        print("usage: macropad-probe sniff <vidHex> <pidHex> [seconds]"); exit(2)
+        print("usage: knurl-probe sniff <vidHex> <pidHex> [seconds]"); exit(2)
     }
     let seconds = args.count > 3 ? (Double(args[3]) ?? 30) : 30
     let targets = transport.allInterfaces.filter { $0.vendorId == vid && $0.productId == pid }

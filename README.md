@@ -1,10 +1,14 @@
-# MacroPad for macOS
+# Knurl
 
-A native macOS app for configuring cheap USB macro keypads — the same job the
-Windows-only [rOzzy1987/MacroPad](https://github.com/rOzzy1987/MacroPad) does,
-rewritten in Swift/SwiftUI on top of IOKit HID.
+*Knurling is the milled ridging on a knob — the texture that tells your fingers
+there is something to turn.*
 
-No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
+A native macOS app for configuring cheap USB macro keypads. It began as a port
+of the Windows-only [rOzzy1987/MacroPad](https://github.com/rOzzy1987/MacroPad),
+rewritten in Swift/SwiftUI on top of IOKit HID, and grew a third wire protocol
+that project does not cover.
+
+No installer, no drivers, no `hidapi`. Just `Knurl.app`.
 
 ## What it does
 
@@ -30,21 +34,21 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
 
 ```bash
 ./scripts/build-app.sh
-open build/MacroPad.app
+open build/Knurl.app
 ```
 
-Requires the Xcode command line tools. The result is `build/MacroPad.app`.
+Requires the Xcode command line tools. The result is `build/Knurl.app`.
 
 There is also a diagnostic CLI:
 
 ```bash
 swift build
-.build/debug/macropad-probe list        # candidate configuration interfaces
-.build/debug/macropad-probe interfaces  # every HID interface, keyboards included
-.build/debug/macropad-probe info        # ask a WebHub device to describe itself
-.build/debug/macropad-probe readkeys 0  # dump the key table for a layer
-.build/debug/macropad-probe setkey 0 0 32 00 1D 00   # index, layer, type, c1, c2, c3
-.build/debug/macropad-probe sniff 6D7B DCFA 60       # watch what the pad emits
+.build/debug/knurl-probe list        # candidate configuration interfaces
+.build/debug/knurl-probe interfaces  # every HID interface, keyboards included
+.build/debug/knurl-probe info        # ask a WebHub device to describe itself
+.build/debug/knurl-probe readkeys 0  # dump the key table for a layer
+.build/debug/knurl-probe setkey 0 0 32 00 1D 00   # index, layer, type, c1, c2, c3
+.build/debug/knurl-probe sniff 6D7B DCFA 60       # watch what the pad emits
 ```
 
 `info`, `readkeys`, `interfaces` and `sniff` only read; `setkey` writes.
@@ -187,12 +191,14 @@ interfaces** in the device menu to pick one by hand.
 
 ## Layout
 
-`Sources/MacroPadCore` holds everything device-related — the two report
+`Sources/KnurlCore` holds everything device-related — the two report
 composers, the IOKit transport, the HID usage tables, the pad layouts.
-`Sources/MacroPadApp` is the SwiftUI front end. `Sources/macropad-probe` is the
+`Sources/KnurlApp` is the SwiftUI front end. `Sources/knurl-probe` is the
 CLI.
 
 ## Licence
 
-The protocol is derived from rOzzy1987/MacroPad, which is GPL-3.0. This
-reimplementation follows the same licence.
+Two of the three wire protocols are derived from
+[rOzzy1987/MacroPad](https://github.com/rOzzy1987/MacroPad), which is GPL-3.0,
+so this reimplementation follows the same licence. The third was reverse
+engineered here.

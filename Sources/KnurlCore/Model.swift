@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Protocol family
 
 /// The two wire protocols used by these keypads.
-/// Ported from RSoft.MacroPad `ProtocolType`.
+/// Ported from RSoft.Knurl `ProtocolType`.
 public enum PadProtocol: String, Codable, CaseIterable, Sendable {
     case legacy
     case extended

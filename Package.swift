@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacroPadMac",
+    name: "Knurl",
     platforms: [.macOS(.v13)],
     targets: [
-        .target(name: "MacroPadCore"),
-        .executableTarget(name: "macropad-probe", dependencies: ["MacroPadCore"]),
+        .target(name: "KnurlCore"),
+        .executableTarget(name: "knurl-probe", dependencies: ["KnurlCore"]),
         .executableTarget(
-            name: "MacroPadApp",
-            dependencies: ["MacroPadCore"],
+            name: "KnurlApp",
+            dependencies: ["KnurlCore"],
             swiftSettings: [.unsafeFlags(["-parse-as-library"])]
         ),
     ]

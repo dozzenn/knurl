@@ -26,7 +26,7 @@ public final class PresetStore {
     public init(directory: URL? = nil) {
         let base = directory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("MacroPad/Presets", isDirectory: true)
+                .appendingPathComponent("Knurl/Presets", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         self.directory = base
     }

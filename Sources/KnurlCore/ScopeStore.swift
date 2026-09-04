@@ -36,7 +36,7 @@ public final class ScopeStore {
     public init(directory: URL? = nil) {
         let base = directory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("MacroPad", isDirectory: true)
+                .appendingPathComponent("Knurl", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         url = base.appendingPathComponent("scopes.json")
 

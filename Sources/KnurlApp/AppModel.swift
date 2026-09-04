@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import ServiceManagement
 import Combine
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 enum EditorTab: String, CaseIterable, Identifiable {
     case keys, media, mouse, led
@@ -169,6 +169,7 @@ final class AppModel: ObservableObject {
         transport.onLog = { [weak self] entry in
             Task { @MainActor in self?.append(entry) }
         }
+        Migration.runIfNeeded()
         nicknames = (UserDefaults.standard.dictionary(forKey: Self.nicknameKey) as? [String: String]) ?? [:]
         scopes = scopeStore.scopes
         profile = scopeStore.profile(for: currentScopeKey)
@@ -607,7 +608,7 @@ final class AppModel: ObservableObject {
                 try SMAppService.mainApp.unregister()
             }
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            setStatus(launchAtLogin ? "MacroPad will open at login" : "MacroPad will not open at login")
+            setStatus(launchAtLogin ? "Knurl will open at login" : "Knurl will not open at login")
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             setStatus("Could not change the login item: \(error.localizedDescription)", error: true)

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 /// Everything the app can do lives in this one window, listed down the left.
 /// Settings are a section here rather than a separate window behind a menu —
@@ -35,7 +35,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
     var group: String {
         switch self {
         case .keys, .backlight, .apps, .presets: return "Keypad"
-        case .general, .about: return "MacroPad"
+        case .general, .about: return "Knurl"
         }
     }
 }
@@ -86,7 +86,7 @@ private struct Sidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            DotMatrixNumber(text: "MACROPAD", dot: 2.5, gap: 1.4, color: Theme.text)
+            DotMatrixNumber(text: "KNURL", dot: 2.5, gap: 1.4, color: Theme.text)
                 .padding(.leading, 12)
                 .padding(.top, Theme.trafficLightInset - 40)
                 .padding(.bottom, 14)
@@ -95,7 +95,7 @@ private struct Sidebar: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 4)
 
-            ForEach(["Keypad", "MacroPad"], id: \.self) { group in
+            ForEach(["Keypad", "Knurl"], id: \.self) { group in
                 PanelLabel(text: group, colour: Theme.textFaint)
                     .padding(.horizontal, 12)
                     .padding(.top, 16)

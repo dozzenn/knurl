@@ -1,8 +1,8 @@
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 @main
-struct MacroPadApp: App {
+struct KnurlApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
@@ -13,7 +13,7 @@ struct MacroPadApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("MacroPad", id: "main") {
+        Window("Knurl", id: "main") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 1000, minHeight: 660)

@@ -1,5 +1,5 @@
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 /// A small version of the panel for the menu bar: what the keypad is holding,
 /// and the sets you can put on it. Everything else lives in the window.
@@ -37,7 +37,7 @@ struct MenuBarPanel: View {
             Hairline().padding(.vertical, 6)
 
             Row(title: "Save to keypad", icon: "arrow.down.circle") { model.saveToKeyboard() }
-            Row(title: "Open MacroPad", icon: "macwindow") {
+            Row(title: "Open Knurl", icon: "macwindow") {
                 NSApp.activate(ignoringOtherApps: true)
                 NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
             }

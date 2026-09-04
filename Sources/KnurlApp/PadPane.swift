@@ -1,5 +1,5 @@
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 /// The keypad itself, drawn where the keys physically sit — a plate with keys
 /// standing proud of it. Selecting a key is the most repeated action here, so

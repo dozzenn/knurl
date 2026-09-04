@@ -1,10 +1,10 @@
 #!/bin/bash
-# Builds MacroPad.app from the Swift package. Needs the Xcode command line tools.
+# Builds Knurl.app from the Swift package. Needs the Xcode command line tools.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="${1:-release}"
-APP="$ROOT/build/MacroPad.app"
+APP="$ROOT/build/Knurl.app"
 
 echo "Building ($CONFIG)…"
 swift build --package-path "$ROOT" -c "$CONFIG"
@@ -12,7 +12,7 @@ BIN="$(swift build --package-path "$ROOT" -c "$CONFIG" --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/MacroPadApp"           "$APP/Contents/MacOS/MacroPad"
+cp "$BIN/KnurlApp"           "$APP/Contents/MacOS/Knurl"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import MacroPadCore
+import KnurlCore
 
 // MARK: - Backlight
 
@@ -506,7 +506,7 @@ struct GeneralSection: View {
             VStack(alignment: .leading, spacing: 18) {
                 Panel(title: "Startup") {
                     SwitchRow(title: "Open at login",
-                              detail: "Start MacroPad when you log in",
+                              detail: "Start Knurl when you log in",
                               isOn: Binding(get: { model.launchAtLogin },
                                             set: { model.setLaunchAtLogin($0) }))
                     SwitchRow(title: "Menu bar only",
@@ -617,7 +617,7 @@ struct AboutSection: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 14) {
-                    DotMatrixNumber(text: "MACROPAD", dot: 4, gap: 2, color: Theme.textOnWell)
+                    DotMatrixNumber(text: "KNURL", dot: 4, gap: 2, color: Theme.textOnWell)
                     Text("A native macOS configurator for cheap USB macro keypads.")
                         .font(Theme.rowDetail)
                         .foregroundStyle(Theme.textOnWellMuted)

@@ -9,7 +9,9 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopBar()
+            TopBar(showTemplates: $showTemplates)
+            Hairline()
+            ScopeBar()
             Hairline()
 
             HStack(spacing: 0) {
@@ -28,7 +30,7 @@ struct ContentView: View {
             }
 
             Hairline()
-            BottomBar(showLog: $showLog, showTemplates: $showTemplates)
+            BottomBar(showLog: $showLog)
         }
         .sheet(isPresented: $showTemplates) {
             TemplateGallery().environmentObject(model)
@@ -50,13 +52,27 @@ struct ContentView: View {
 
 private struct TopBar: View {
     @EnvironmentObject private var model: AppModel
+    @Binding var showTemplates: Bool
 
     var body: some View {
         HStack(spacing: 8) {
             DeviceCard()
-            ProfileCard()
 
             Spacer(minLength: 12)
+
+            BarAction(title: "Templates", prominent: true) { showTemplates = true }
+
+            Menu {
+                Button("Import preset…") { model.importPreset() }
+                Button("Export preset…") { model.exportPreset() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 26)
 
             if model.layout.layerCount > 1 {
                 Segmented(selection: $model.layer,
@@ -99,8 +115,7 @@ private struct DeviceCard: View {
             showing.toggle()
         }
         .popover(isPresented: $showing, arrowEdge: Edge.bottom) {
-            DevicePopover()
-                .environmentObject(model)
+            DevicePopover().environmentObject(model)
         }
     }
 }
@@ -156,11 +171,6 @@ private struct DevicePopover: View {
                     }
                 }
                 .padding(.horizontal, 9)
-                Text("Only changes what this app calls it.")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.textFaint)
-                    .padding(.horizontal, 9)
-                    .padding(.top, 5)
             }
 
             Divider().background(Theme.hairline).padding(.vertical, 8)
@@ -189,169 +199,170 @@ private struct DevicePopover: View {
     }
 }
 
-/// Profiles are whole sets of mappings. Switching one writes it to the keypad,
-/// so the card says which set is currently loaded.
-private struct ProfileCard: View {
+// MARK: - Scope bar
+
+/// Which app the mappings below belong to. Global is the fallback; an app tab
+/// holds keys that only apply while that app is in front.
+struct ScopeBar: View {
     @EnvironmentObject private var model: AppModel
-    @State private var showing = false
 
     var body: some View {
-        Pill(active: showing) {
-            HStack(spacing: 9) {
-                Image(systemName: "square.stack.3d.up.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(model.activeProfileName == nil ? Theme.textFaint : Theme.accent)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(model.activeProfileName == nil && !model.loadedFromDevice
-                                         ? Theme.textMuted : Theme.text)
-                        .lineLimit(1)
-                    Text(mappedSummary)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textFaint)
-                        .lineLimit(1)
+        HStack(spacing: 7) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(model.scopes) { scope in
+                        ScopeChip(scope: scope)
+                    }
+                    AddAppChip()
                 }
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                .padding(.vertical, 1)
+            }
+
+            Spacer(minLength: 10)
+            FollowToggle()
+        }
+        .padding(.leading, Theme.gutter)
+        .padding(.trailing, Theme.gutter)
+        .frame(height: 46)
+    }
+}
+
+private struct ScopeChip: View {
+    @EnvironmentObject private var model: AppModel
+    let scope: MappingScope
+
+    @State private var hovering = false
+
+    private var selected: Bool { model.currentScopeKey == scope.key }
+    private var isLive: Bool { model.liveScopeKey == scope.key && model.isConnected }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if scope.isGlobal {
+                Image(systemName: "globe")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(selected ? Theme.text : Theme.textMuted)
+            } else if let icon = appIcon {
+                Image(nsImage: icon).resizable().frame(width: 15, height: 15)
+            } else {
+                Image(systemName: "app.dashed")
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.textFaint)
             }
-        } action: {
-            showing.toggle()
+
+            Text(scope.name)
+                .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
+                .foregroundStyle(selected ? Theme.text : Theme.textMuted)
+                .lineLimit(1)
+
+            if isLive {
+                Circle().fill(Theme.online).frame(width: 5, height: 5)
+                    .help("This is what the keypad is holding right now")
+            } else if !model.scopeHasMappings(scope) {
+                Text("empty")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(Theme.textFaint)
+            }
+
+            if !scope.isGlobal && selected {
+                Button { model.removeScope(scope) } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Theme.textFaint)
+                }
+                .buttonStyle(PressableStyle())
+                .help("Remove this app")
+            }
         }
-        .popover(isPresented: $showing, arrowEdge: Edge.bottom) {
-            ProfilePopover()
-                .environmentObject(model)
-        }
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? Theme.fillStrong : (hovering ? Theme.rowHover : Theme.fill))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(selected ? Color.white.opacity(0.2) : Theme.hairline, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onTapGesture { model.selectScope(scope.key) }
+        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
     }
 
-    /// Never leave the user guessing whether their mappings survived: say
-    /// where what they are looking at came from.
-    private var title: String {
-        if let name = model.activeProfileName { return name }
-        return model.loadedFromDevice ? "On the keypad" : "Unsaved changes"
-    }
-
-    private var mappedSummary: String {
-        let n = model.profile.configured(layerCount: model.layout.layerCount).count
-        let count = n == 0 ? "Nothing mapped" : (n == 1 ? "1 key mapped" : "\(n) keys mapped")
-        if model.loadedFromDevice { return count + " · read from the keypad" }
-        return count
+    private var appIcon: NSImage? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: scope.key) else {
+            return nil
+        }
+        return NSWorkspace.shared.icon(forFile: url.path)
     }
 }
 
-private struct ProfilePopover: View {
+private struct AddAppChip: View {
     @EnvironmentObject private var model: AppModel
-    @State private var showSaveSheet = false
-    @State private var showRules = false
-    @State private var newName = ""
+    @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Saved profiles")
-
-            if model.profiles.isEmpty {
-                EmptyStateView(icon: "square.stack.3d.up.slash",
-                               title: "No profiles yet",
-                               message: "Save the current mappings to switch between setups later.")
+        Button(action: pickApp) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Add application")
+                    .font(.system(size: 12.5, weight: .medium))
             }
-
-            ForEach(model.profiles) { entry in
-                Row(title: entry.name,
-                    subtitle: "loads onto the keypad",
-                    icon: "square.stack.3d.up",
-                    selected: entry.name == model.activeProfileName,
-                    action: { model.switchTo(entry) }) {
-                    if entry.name == model.activeProfileName {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
-            }
-
-            Divider().background(Theme.hairline).padding(.vertical, 8)
-            SectionLabel(text: "Manage")
-
-            Row(title: "Save current mappings as…", icon: "plus.circle") {
-                newName = model.activeProfileName ?? "New profile"
-                showSaveSheet = true
-            }
-            if let active = model.profiles.first(where: { $0.name == model.activeProfileName }) {
-                Row(title: "Update “\(active.name)”", icon: "arrow.triangle.2.circlepath") {
-                    model.saveProfile(named: active.name)
-                }
-                Row(title: "Delete “\(active.name)”", icon: "trash", iconTint: Theme.accent) {
-                    model.deleteProfile(active)
-                }
-            }
-
-            Divider().background(Theme.hairline).padding(.vertical, 8)
-            SectionLabel(text: "Automatic")
-
-            Row(title: "Switch by app…",
-                subtitle: model.autoSwitchEnabled ? "on, \(model.appRules.count) rule\(model.appRules.count == 1 ? "" : "s")" : "off",
-                icon: "app.badge") {
-                showRules = true
-            }
-
-            Divider().background(Theme.hairline).padding(.vertical, 8)
-            SectionLabel(text: "Presets")
-
-            Row(title: "Import preset…", subtitle: "from a file", icon: "square.and.arrow.down") {
-                model.importPreset()
-            }
-            Row(title: "Export preset…", subtitle: "to a file", icon: "square.and.arrow.up") {
-                model.exportPreset()
-            }
+            .foregroundStyle(hovering ? Theme.text : Theme.textMuted)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(hovering ? Theme.rowHover : .clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            )
         }
-        .padding(.vertical, 8)
-        .frame(width: 330)
-        .background(PopoverBackground())
-        .sheet(isPresented: $showSaveSheet) {
-            SaveProfileSheet(name: $newName) { model.saveProfile(named: $0) }
-        }
-        .sheet(isPresented: $showRules) {
-            AppRulesSheet().environmentObject(model)
-        }
+        .buttonStyle(PressableStyle())
+        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+    }
+
+    private func pickApp() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.title = "Choose an app"
+        panel.message = "Keys you set for this app apply only while it is in front."
+        guard panel.runModal() == .OK, let url = panel.url,
+              let bundle = Bundle(url: url), let id = bundle.bundleIdentifier else { return }
+        let name = (bundle.infoDictionary?["CFBundleDisplayName"] as? String)
+            ?? (bundle.infoDictionary?["CFBundleName"] as? String)
+            ?? url.deletingPathExtension().lastPathComponent
+        model.addAppScope(bundleId: id, name: name)
     }
 }
 
-private struct SaveProfileSheet: View {
-    @Binding var name: String
-    let onSave: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
+/// Says plainly what the automation does, because "auto switch" on its own does
+/// not tell you what switches or when.
+private struct FollowToggle: View {
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Name this profile")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.text)
-            TextField("For example: Photoshop", text: $name)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 9)
-                .frame(height: 30)
-                .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.fill))
-                .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Theme.hairline))
-                .onSubmit(save)
-            HStack {
-                Spacer()
-                BarAction(title: "Cancel") { dismiss() }
-                BarAction(title: "Save", keys: ["⏎"], prominent: true, action: save)
+        HStack(spacing: 8) {
+            VStack(alignment: .trailing, spacing: 0) {
+                Text("Follow the front app")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(model.autoSwitchEnabled ? Theme.text : Theme.textMuted)
+                Text(model.autoSwitchEnabled
+                     ? "keypad loads an app's keys when you switch to it"
+                     : "keypad keeps whatever you last saved")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textFaint)
             }
+            Toggle("", isOn: $model.autoSwitchEnabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
-        .padding(16)
-        .frame(width: 330)
-        .background(PopoverBackground())
-    }
-
-    private func save() {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        onSave(trimmed)
-        dismiss()
     }
 }
 
@@ -360,7 +371,6 @@ private struct SaveProfileSheet: View {
 private struct BottomBar: View {
     @EnvironmentObject private var model: AppModel
     @Binding var showLog: Bool
-    @Binding var showTemplates: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -375,7 +385,6 @@ private struct BottomBar: View {
 
             Spacer(minLength: 12)
 
-            BarAction(title: "Templates") { showTemplates = true }
             BarAction(title: "HID log", prominent: showLog) { showLog.toggle() }
             Rectangle().fill(Theme.hairline).frame(width: 1, height: 18)
             BarAction(title: "Save this key", keys: ["⌥", "⌘", "S"]) { model.saveSelectedKey() }

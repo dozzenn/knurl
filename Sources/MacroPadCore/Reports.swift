@@ -403,8 +403,10 @@ public struct BacklightState: Equatable, Sendable {
     public var usesColor: Bool { mode >= 1 && mode <= 4 }
     public var isOff: Bool { mode == 0 }
 
-    public static let maxBrightness: UInt8 = 5
-    public static let maxSpeed: UInt8 = 5
+    // Both are 0…4 in the vendor's own configurator; 5 is out of range and the
+    // firmware does something arbitrary with it rather than clamping.
+    public static let maxBrightness: UInt8 = 4
+    public static let maxSpeed: UInt8 = 4
 }
 
 public extension WebHubComposer {

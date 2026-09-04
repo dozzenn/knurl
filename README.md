@@ -10,7 +10,7 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
 
 * Templates that fill the whole pad at once — music, clipboard, design, video
   editing, screenshots, browser tabs
-* Per-app profiles: the keypad follows whichever app is in front
+* Global keys plus per-app overrides — the keypad follows whichever app is in front
 
 * Lives in the menu bar, with a command palette on ⌃⌥⌘K for switching profiles
   from any app without opening the window
@@ -75,10 +75,22 @@ sensibly on a three-key pad and a twelve-key one. Choosing one writes it to the
 keypad immediately. Each card lists exactly what it will put on every key, and
 templates whose shortcuts are app-specific say so.
 
-**Switch by app** in the profile card ties a bundle identifier to a saved
-profile and loads it when that app comes to the front. Every switch is a write
-to the keypad's flash, so a profile that is already loaded is skipped rather
-than rewritten.
+Mappings live in **scopes**: `Global`, plus one per app you add. Global is the
+fallback; an app scope holds keys that only apply while that app is in front.
+The scope bar under the toolbar is the whole model — pick a scope and the editor
+below edits that scope.
+
+The editor never moves on its own: you edit the scope you picked, and only the
+keypad follows the front app. When an app with its own mappings comes forward
+its scope is written to the hardware, otherwise Global is. Each write is a write
+to the keypad's flash, so a scope already on the device is skipped.
+
+Writing a scope also clears the slots it leaves empty, so a key from the
+previous scope cannot linger.
+
+Connecting reads the key table off the keypad, but only *adopts* it into a scope
+that is still empty — once you have set keys, your work outranks whatever the
+pad happens to be carrying.
 
 ## Menu bar and the command palette
 
@@ -152,7 +164,8 @@ Backlight is one read/write block: `06 0A` reads it, and
 `06 0B 0B 00 00 <type> 00 <mode> <brightness> <speed> <direction> <color> 00 <h> <s> <v>`
 writes it. `color` is a flag — `0` runs the palette and ignores the hue, `1`
 uses the `h`/`s`/`v` triple. Effects are 0 off, 1 solid, 2 breathing, 3 blink,
-4 tide, 5 custom.
+4 tide, 5 custom. Brightness and speed are **0–4**: the firmware stores a 5
+without complaint but then behaves erratically, so the app does not offer one.
 
 The app reads the key table and the backlight off the keypad whenever it
 connects, so the window shows what the hardware actually holds instead of an

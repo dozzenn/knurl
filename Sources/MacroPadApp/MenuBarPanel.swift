@@ -12,24 +12,16 @@ struct MenuBarPanel: View {
             header
 
             Divider().background(Theme.hairline).padding(.vertical, 6)
-            SectionLabel(text: "Profiles")
+            SectionLabel(text: "Key sets")
 
-            if model.profiles.isEmpty {
-                Text("No profiles saved yet.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textFaint)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-            }
-            ForEach(model.profiles) { entry in
-                Row(title: entry.name,
-                    icon: "square.stack.3d.up",
-                    selected: entry.name == model.activeProfileName,
-                    action: { model.switchTo(entry) }) {
-                    if entry.name == model.activeProfileName {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+            ForEach(model.scopes) { scope in
+                Row(title: scope.name,
+                    subtitle: scope.isGlobal ? "everywhere" : "only in this app",
+                    icon: scope.isGlobal ? "globe" : "app",
+                    selected: scope.key == model.liveScopeKey,
+                    action: { model.load(scope) }) {
+                    if scope.key == model.liveScopeKey {
+                        Circle().fill(Theme.online).frame(width: 6, height: 6)
                     }
                 }
             }

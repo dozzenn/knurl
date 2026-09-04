@@ -54,14 +54,6 @@ final class AppModel: ObservableObject {
     @Published var selectedAction: InputAction = .key1 { didSet { loadEditor() } }
     @Published var profile = Profile()
 
-    // MARK: Saved profiles
-
-    @Published private(set) var profiles: [ProfileStore.Entry] = []
-    @Published var activeProfileName: String? {
-        didSet { UserDefaults.standard.set(activeProfileName, forKey: "activeProfileName") }
-    }
-    private let profileStore = ProfileStore()
-
     // MARK: Editor state
 
     @Published var editorTab: EditorTab = .keys
@@ -178,12 +170,11 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.append(entry) }
         }
         nicknames = (UserDefaults.standard.dictionary(forKey: Self.nicknameKey) as? [String: String]) ?? [:]
-        activeProfileName = UserDefaults.standard.string(forKey: "activeProfileName")
-        loadRules()
+        scopes = scopeStore.scopes
+        profile = scopeStore.profile(for: currentScopeKey)
         if autoSwitchEnabled { startWatchingApps() }
         transport.startMonitoring()
         deviceListChanged()
-        refreshProfiles()
         loadEditor()
     }
 
@@ -244,13 +235,6 @@ final class AppModel: ObservableObject {
     /// True while the editor is showing exactly what was read off the keypad.
     @Published private(set) var loadedFromDevice = false
 
-    private func matchingProfileName(for candidate: Profile) -> String? {
-        for entry in profiles {
-            guard let saved = try? ProfileStore().load(entry) else { continue }
-            if saved.bindings == candidate.bindings { return entry.name }
-        }
-        return nil
-    }
 
     /// Pulls what is actually stored on the keypad into the editor.
     ///
@@ -305,17 +289,21 @@ final class AppModel: ObservableObject {
         }
         guard found > 0 else { return }
 
+        // Adopt what the hardware holds only when this scope is empty. Once the
+        // user has set keys here, their work outranks whatever the pad happens
+        // to be carrying — overwriting it on connect would destroy it.
+        guard profile.configured(layerCount: layout.layerCount).isEmpty else {
+            setStatus("Keypad is holding \(found) mapping\(found == 1 ? "" : "s") — Save to write what you see here")
+            return
+        }
+
         restored.ledMode = profile.ledMode
         restored.ledColor = profile.ledColor
         profile = restored
         loadedFromDevice = true
-
-        // If what the keypad holds is exactly one of the saved profiles, say so;
-        // otherwise the card says the mappings came off the hardware rather than
-        // implying unsaved edits.
-        activeProfileName = matchingProfileName(for: restored)
+        persistCurrentScope()
         loadEditor()
-        setStatus("Read \(found) mapping\(found == 1 ? "" : "s") from the keypad")
+        setStatus("Read \(found) mapping\(found == 1 ? "" : "s") off the keypad")
     }
 
     // MARK: - Editor <-> profile
@@ -477,18 +465,49 @@ final class AppModel: ObservableObject {
         isRecording = false
         guard ensureConnected() else { return }
         commit()
+        persistCurrentScope()
+        guard writeToDevice(profile, describing: currentScope.name) else { return }
+        liveScopeKey = currentScopeKey
+    }
+
+    /// Sends every mapping in a profile, plus the entries that clear the slots
+    /// it leaves empty — otherwise a key from the previous scope would linger.
+    @discardableResult
+    func writeToDevice(_ source: Profile, describing what: String) -> Bool {
+        guard let webhub = composer as? WebHubComposer else {
+            var reports: [PadReport] = []
+            for entry in source.configured(layerCount: layout.layerCount) {
+                reports.append(contentsOf: composer.reports(for: entry.binding,
+                                                            action: entry.action,
+                                                            layer: entry.layer))
+            }
+            guard !reports.isEmpty else {
+                setStatus("Nothing to save yet — map a key first", error: true)
+                return false
+            }
+            send(reports, describing: what)
+            return true
+        }
 
         var reports: [PadReport] = []
-        for entry in profile.configured(layerCount: layout.layerCount) {
-            reports.append(contentsOf: composer.reports(for: entry.binding, action: entry.action, layer: entry.layer))
+        var written = 0
+        for control in layout.controls {
+            for action in control.actions {
+                let binding = source[layer, action]
+                if binding.isSet {
+                    reports.append(contentsOf: webhub.reports(for: binding, action: action, layer: layer))
+                    written += 1
+                } else {
+                    reports.append(contentsOf: webhub.clear(action: action, layer: layer))
+                }
+            }
         }
-        reports.append(contentsOf: composer.led(layer: layer, mode: profile.ledMode, color: profile.ledColor))
         guard !reports.isEmpty else {
             setStatus("Nothing to save yet — map a key first", error: true)
-            return
+            return false
         }
-        let n = profile.configured(layerCount: layout.layerCount).count
-        send(reports, describing: n == 1 ? "1 key" : "\(n) keys")
+        send(reports, describing: "\(what) — \(written) key\(written == 1 ? "" : "s")")
+        return true
     }
 
     private func ensureConnected() -> Bool {
@@ -522,58 +541,6 @@ final class AppModel: ObservableObject {
         }
         setStatus(accepted.isEmpty ? "No report id accepted" : "Accepted: \(accepted.joined(separator: ", "))",
                   error: accepted.isEmpty)
-    }
-
-    // MARK: - Saved profiles
-
-    func refreshProfiles() {
-        profiles = profileStore.list()
-    }
-
-    /// Loads a saved profile and, when a pad is connected, pushes it straight to
-    /// the hardware — switching profiles is the whole point of having them.
-    func switchTo(_ entry: ProfileStore.Entry) {
-        do {
-            let loaded = try profileStore.load(entry)
-            profile = loaded
-            activeProfileName = entry.name
-            loadedFromDevice = false
-            if let match = LayoutLibrary.all.first(where: { $0.name == loaded.layoutName }) { layout = match }
-            loadEditor()
-            if isConnected {
-                saveToKeyboard()
-            } else {
-                setStatus("Loaded “\(entry.name)” — connect the pad to apply it")
-            }
-        } catch {
-            setStatus("Could not open “\(entry.name)”: \(error.localizedDescription)", error: true)
-        }
-    }
-
-    func saveProfile(named name: String) {
-        commit()
-        var p = profile
-        p.layoutName = layout.name
-        do {
-            let entry = try profileStore.save(p, as: name)
-            profile.name = name
-            activeProfileName = entry.name
-            refreshProfiles()
-            setStatus("Saved “\(entry.name)”")
-        } catch {
-            setStatus("Could not save: \(error.localizedDescription)", error: true)
-        }
-    }
-
-    func deleteProfile(_ entry: ProfileStore.Entry) {
-        do {
-            try profileStore.delete(entry)
-            if activeProfileName == entry.name { activeProfileName = nil }
-            refreshProfiles()
-            setStatus("Deleted “\(entry.name)”")
-        } catch {
-            setStatus("Could not delete: \(error.localizedDescription)", error: true)
-        }
     }
 
     // MARK: - Backlight
@@ -653,14 +620,14 @@ final class AppModel: ObservableObject {
     var paletteCommands: [PaletteCommand] {
         var out: [PaletteCommand] = []
 
-        for entry in profiles {
+        for scope in scopes {
             out.append(PaletteCommand(
-                id: "profile:\(entry.id)",
-                title: entry.name,
-                subtitle: entry.name == activeProfileName ? "already loaded" : "load onto the keypad",
-                icon: "square.stack.3d.up",
-                group: "Profiles",
-                run: { [weak self] in self?.switchTo(entry) }
+                id: "scope:\(scope.key)",
+                title: scope.name,
+                subtitle: scope.key == liveScopeKey ? "already on the keypad" : "write these keys to the keypad",
+                icon: scope.isGlobal ? "globe" : "app",
+                group: "Key sets",
+                run: { [weak self] in self?.load(scope) }
             ))
         }
 
@@ -710,47 +677,76 @@ final class AppModel: ObservableObject {
         return out
     }
 
-    // MARK: - Per-app profiles
+    // MARK: - Scopes: global, and one per app
 
-    struct AppRule: Codable, Identifiable, Hashable {
-        var bundleId: String
-        var appName: String
-        var profileName: String
-        var id: String { bundleId }
-    }
+    private let scopeStore = ScopeStore()
 
-    @Published private(set) var appRules: [AppRule] = [] {
-        didSet {
-            if let data = try? JSONEncoder().encode(appRules) {
-                UserDefaults.standard.set(data, forKey: "appRules")
-            }
-        }
-    }
+    @Published private(set) var scopes: [MappingScope] = []
+    /// Which scope the editor is showing. The editor never moves on its own —
+    /// the user picks what they are editing; only the keypad follows the front app.
+    @Published private(set) var currentScopeKey = MappingScope.globalKey
 
-    @Published var autoSwitchEnabled: Bool = UserDefaults.standard.bool(forKey: "autoSwitchEnabled") {
+    @Published var autoSwitchEnabled: Bool = UserDefaults.standard.object(forKey: "autoSwitchEnabled") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(autoSwitchEnabled, forKey: "autoSwitchEnabled")
             autoSwitchEnabled ? startWatchingApps() : stopWatchingApps()
         }
     }
 
+    /// The scope the keypad is currently holding, which is not necessarily the
+    /// one on screen.
+    @Published private(set) var liveScopeKey = MappingScope.globalKey
+
     private var workspaceObserver: Any?
 
-    func addRule(bundleId: String, appName: String, profileName: String) {
-        appRules.removeAll { $0.bundleId == bundleId }
-        appRules.append(AppRule(bundleId: bundleId, appName: appName, profileName: profileName))
-        appRules.sort { $0.appName.localizedStandardCompare($1.appName) == .orderedAscending }
+    var currentScope: MappingScope {
+        scopes.first { $0.key == currentScopeKey } ?? .global
     }
 
-    func removeRule(_ rule: AppRule) {
-        appRules.removeAll { $0.id == rule.id }
+    func scopeHasMappings(_ scope: MappingScope) -> Bool {
+        scope.key == currentScopeKey
+            ? !profile.configured(layerCount: layout.layerCount).isEmpty
+            : scopeStore.hasMappings(scope.key, layerCount: layout.layerCount)
     }
 
-    private func loadRules() {
-        guard let data = UserDefaults.standard.data(forKey: "appRules"),
-              let decoded = try? JSONDecoder().decode([AppRule].self, from: data) else { return }
-        appRules = decoded
+    func selectScope(_ key: String) {
+        guard key != currentScopeKey else { return }
+        persistCurrentScope()
+        currentScopeKey = key
+        profile = scopeStore.profile(for: key)
+        loadedFromDevice = false
+        loadEditor()
     }
+
+    /// Shows a scope in the editor and writes it to the keypad.
+    func load(_ scope: MappingScope) {
+        selectScope(scope.key)
+        if isConnected { saveToKeyboard() }
+    }
+
+    func addAppScope(bundleId: String, name: String) {
+        _ = scopeStore.addScope(key: bundleId, name: name)
+        scopes = scopeStore.scopes
+        selectScope(bundleId)
+        setStatus("Added \(name) — the keys you set here apply only in that app")
+    }
+
+    func removeScope(_ scope: MappingScope) {
+        guard !scope.isGlobal else { return }
+        scopeStore.removeScope(key: scope.key)
+        scopes = scopeStore.scopes
+        if currentScopeKey == scope.key {
+            currentScopeKey = MappingScope.globalKey
+            profile = scopeStore.profile(for: MappingScope.globalKey)
+            loadEditor()
+        }
+    }
+
+    private func persistCurrentScope() {
+        scopeStore.setProfile(profile, for: currentScopeKey)
+    }
+
+    // MARK: Following the front app
 
     func startWatchingApps() {
         guard workspaceObserver == nil else { return }
@@ -772,14 +768,24 @@ final class AppModel: ObservableObject {
     }
 
     private func frontmostAppChanged(to bundleId: String?) {
-        guard autoSwitchEnabled, isConnected,
-              let bundleId,
-              let rule = appRules.first(where: { $0.bundleId == bundleId }) else { return }
-        // Every write is a write to the keypad's flash, so a profile that is
-        // already loaded is left alone.
-        guard rule.profileName != activeProfileName,
-              let entry = profiles.first(where: { $0.name == rule.profileName }) else { return }
-        switchTo(entry)
+        guard autoSwitchEnabled, isConnected else { return }
+        persistCurrentScope()
+
+        // An app with its own mappings wins; everything else falls back to Global.
+        let target: String
+        if let bundleId, scopes.contains(where: { $0.key == bundleId }),
+           scopeStore.hasMappings(bundleId, layerCount: layout.layerCount) {
+            target = bundleId
+        } else {
+            target = MappingScope.globalKey
+        }
+
+        // Every write is a write to the keypad's flash, so a scope that is
+        // already on the device is left alone.
+        guard target != liveScopeKey else { return }
+        let wanted = target == currentScopeKey ? profile : scopeStore.profile(for: target)
+        writeToDevice(wanted, describing: scopes.first { $0.key == target }?.name ?? "Global")
+        liveScopeKey = target
     }
 
     // MARK: - Templates
@@ -794,8 +800,8 @@ final class AppModel: ObservableObject {
         next.ledMode = profile.ledMode
         next.ledColor = profile.ledColor
         profile = next
-        activeProfileName = nil
         loadedFromDevice = false
+        persistCurrentScope()
         loadEditor()
 
         if isConnected {
@@ -813,13 +819,13 @@ final class AppModel: ObservableObject {
         commit()
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "\(activeProfileName ?? "MacroPad preset").json"
+        panel.nameFieldStringValue = "\(currentScope.name) keys.json"
         panel.title = "Export preset"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             var p = profile
             p.layoutName = layout.name
-            p.name = activeProfileName ?? p.name
+            p.name = currentScope.name
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(p).write(to: url, options: .atomic)
@@ -840,7 +846,7 @@ final class AppModel: ObservableObject {
         do {
             let p = try JSONDecoder().decode(Profile.self, from: Data(contentsOf: url))
             profile = p
-            activeProfileName = nil
+            persistCurrentScope()
             if let match = LayoutLibrary.all.first(where: { $0.name == p.layoutName }) { layout = match }
             loadEditor()
             setStatus("Imported \(url.lastPathComponent) — review it, then Save to keypad")

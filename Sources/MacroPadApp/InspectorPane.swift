@@ -545,7 +545,8 @@ private struct LabeledSlider: View {
             }
             .padding(.horizontal, 3)
 
-            GlassSlider(value: $value, range: range, ticks: ticks, onCommit: onCommit)
+            GlassSlider(value: $value, range: range, ticks: ticks,
+                        tint: Theme.wedge, onCommit: onCommit)
                 .padding(.horizontal, 3)
         }
         .padding(.top, 12)

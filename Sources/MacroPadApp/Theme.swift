@@ -28,6 +28,9 @@ enum Theme {
     static let accent      = Color(red: 1.00, green: 0.39, blue: 0.39)   // signal red
     static let online      = Color(red: 0.20, green: 0.84, blue: 0.29)
     static let warning     = Color(red: 1.00, green: 0.72, blue: 0.30)
+    /// The instrument yellow used for value handles, so a control that sets a
+    /// number never reads as a control that performs an action.
+    static let wedge       = Color(red: 1.00, green: 0.84, blue: 0.10)
 
     /// Sits behind the blurred material so the window keeps its weight over a
     /// bright desktop.
@@ -400,13 +403,14 @@ struct PopoverBackground: View {
 /// A slider you feel rather than read.
 ///
 /// Tracks the pointer 1:1 from the moment it goes down — no animation on the
-/// drag itself, because the value must sit under the finger. The knob grows
-/// slightly while held, which is the only cue that needs motion.
+/// drag itself, because the value has to sit under the finger. The travelled
+/// part is a solid line and the rest is a dotted trail, so the remaining range
+/// reads as "not yet there" rather than as a second, dimmer bar.
 struct GlassSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double> = 0...1
-    /// Number of tick dots under the track; 0 hides them.
-    var ticks: Int = 0
+    /// Dots drawn along the untravelled part of the track.
+    var ticks: Int = 12
     var tint: Color = Theme.accent
     var onCommit: (() -> Void)?
 
@@ -419,69 +423,71 @@ struct GlassSlider: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            GeometryReader { geo in
-                let w = geo.size.width
-                let knob: CGFloat = dragging ? 20 : 17
+        GeometryReader { geo in
+            let w = geo.size.width
+            let knobW: CGFloat = 14
 
-                ZStack(alignment: .leading) {
-                    // Track: a shallow well, darker than the surface it sits on.
-                    Capsule()
-                        .fill(Color.black.opacity(0.28))
-                        .frame(height: 7)
-                        .overlay(
-                            Capsule().strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
-                        )
-
-                    Capsule()
-                        .fill(LinearGradient(colors: [tint.opacity(0.75), tint],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(7, w * fraction), height: 7)
-
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: knob, height: knob)
-                        .overlay(
-                            Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
-                        )
-                        .shadow(color: .black.opacity(0.45), radius: dragging ? 5 : 3, y: 1)
-                        .offset(x: (w - knob) * fraction)
-                }
-                .frame(height: 22)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { g in
-                            dragging = true
-                            update(to: g.location.x, width: w, knob: knob)
-                        }
-                        .onEnded { _ in
-                            dragging = false
-                            onCommit?()
-                        }
-                )
-            }
-            .frame(height: 22)
-
-            if ticks > 1 {
+            ZStack(alignment: .leading) {
+                // Dotted trail for the part not reached yet.
                 HStack(spacing: 0) {
-                    ForEach(0..<ticks, id: \.self) { i in
+                    ForEach(0..<max(2, ticks), id: \.self) { i in
                         Circle()
-                            .fill(Theme.textFaint.opacity(0.55))
-                            .frame(width: 2.5, height: 2.5)
-                        if i < ticks - 1 { Spacer(minLength: 0) }
+                            .fill(Theme.textFaint.opacity(dotOpacity(i)))
+                            .frame(width: 3, height: 3)
+                        if i < max(2, ticks) - 1 { Spacer(minLength: 0) }
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, knobW / 2)
+
+                // Travelled line.
+                Capsule()
+                    .fill(tint)
+                    .frame(width: max(2, (w - knobW) * fraction + knobW / 2), height: 2)
+
+                // A wedge rather than a puck: it points at the value it marks.
+                Triangle()
+                    .fill(tint)
+                    .frame(width: knobW, height: knobW * 0.86)
+                    .shadow(color: tint.opacity(dragging ? 0.65 : 0.3),
+                            radius: dragging ? 6 : 3)
+                    .scaleEffect(dragging ? 1.18 : 1, anchor: .center)
+                    .offset(x: (w - knobW) * fraction)
             }
+            .frame(height: 26)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        dragging = true
+                        let usable = max(1, w - knobW)
+                        let f = min(1, max(0, (g.location.x - knobW / 2) / usable))
+                        value = range.lowerBound + f * (range.upperBound - range.lowerBound)
+                    }
+                    .onEnded { _ in
+                        dragging = false
+                        onCommit?()
+                    }
+            )
         }
+        .frame(height: 26)
         .animation(Theme.press, value: dragging)
     }
 
-    private func update(to x: CGFloat, width: CGFloat, knob: CGFloat) {
-        let usable = max(1, width - knob)
-        let f = min(1, max(0, (x - knob / 2) / usable))
-        value = range.lowerBound + f * (range.upperBound - range.lowerBound)
+    private func dotOpacity(_ i: Int) -> Double {
+        let position = Double(i) / Double(max(1, max(2, ticks) - 1))
+        return position <= fraction ? 0.18 : 0.75
+    }
+}
+
+/// The wedge used as a slider handle.
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.closeSubpath()
+        return p
     }
 }
 

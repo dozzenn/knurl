@@ -241,16 +241,6 @@ private struct KnobFace: View {
             )
             .scaleEffect(pressed ? 0.94 : 1)
 
-            // Three marks on the bezel saying which of its actions are set.
-            // They are engraved, not pressable — the knob is one target.
-            ForEach(Array(KnobPart.allCases.enumerated()), id: \.offset) { i, part in
-                Circle()
-                    .fill(model.binding(for: InputAction.knob(index, part)).isSet
-                          ? Theme.lampGood : Theme.lampOff.opacity(0.5))
-                    .frame(width: d * 0.035, height: d * 0.035)
-                    .offset(x: CGFloat(i - 1) * d * 0.075, y: bodyD * 0.62)
-            }
-
             PanelLabel(text: "K\(index)", colour: Theme.textFaint, size: max(7, d * 0.085))
                 .offset(y: d * 0.44)
         }

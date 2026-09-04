@@ -411,16 +411,65 @@ final class AppModel: ObservableObject {
 
     func startLiveWatch() {
         guard liveMonitor == nil else { return }
-        liveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+        liveMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .systemDefined]
+        ) { [weak self] event in
+            // The event is always passed on: this is a display, not an
+            // interception. Swallowing the pad's key would stop it doing the
+            // thing it was mapped to.
             guard let self, !self.isRecording else { return event }
-            let usage = HIDKeyboard.virtualKeyToUsage[event.keyCode]
-            let mods = HIDKeyboard.modifiers(from: event.modifierFlags.rawValue)
-            if let usage, let action = self.action(matchingUsage: usage, modifiers: mods) {
-                self.flash(action)
-                return nil   // it was the pad talking to us, not a shortcut
+
+            switch event.type {
+            case .keyDown:
+                if let usage = HIDKeyboard.virtualKeyToUsage[event.keyCode],
+                   let action = self.action(matchingUsage: usage,
+                                            modifiers: AppModel.modifiers(from: event)) {
+                    self.flash(action)
+                }
+            case .systemDefined:
+                if let usage = AppModel.mediaUsage(from: event),
+                   let action = self.action(matchingConsumer: usage) {
+                    self.flash(action)
+                }
+            default:
+                break
             }
             return event
         }
+    }
+
+    /// Media keys arrive as system-defined events carrying their own key code,
+    /// not as key presses, so they need decoding and translating back to the
+    /// HID consumer usage a mapping is stored as.
+    ///
+    /// Whether they reach an app at all is up to the system, which routes them
+    /// to whatever it thinks should handle playback — so this is a bonus rather
+    /// than something to rely on.
+    static func mediaUsage(from event: NSEvent) -> UInt16? {
+        guard event.subtype.rawValue == 8 else { return nil }
+        let code = Int((event.data1 & 0xFFFF_0000) >> 16)
+        let isDown = ((event.data1 & 0x0000_FF00) >> 8) == 0xA
+        guard isDown else { return nil }
+        switch code {
+        case 0: return 0x00E9      // volume up
+        case 1: return 0x00EA      // volume down
+        case 7: return 0x00E2      // mute
+        case 16: return 0x00CD     // play / pause
+        case 17, 19: return 0x00B5 // next
+        case 18, 20: return 0x00B6 // previous
+        default: return nil
+        }
+    }
+
+    private func action(matchingConsumer usage: UInt16) -> InputAction? {
+        for control in layout.controls {
+            for action in control.actions {
+                if case .media(let key) = profile[layer, action], key.usage == usage {
+                    return action
+                }
+            }
+        }
+        return nil
     }
 
     func stopLiveWatch() {
@@ -437,12 +486,29 @@ final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: work)
     }
 
+    /// The modifiers an event carries, whichever way the system reported them.
+    ///
+    /// The device-specific bits say which side a modifier was on, but they are
+    /// not always present; the layout-independent flags always are.
+    static func modifiers(from event: NSEvent) -> Modifier {
+        var mods = HIDKeyboard.modifiers(from: event.modifierFlags.rawValue)
+        if mods.isEmpty {
+            let f = event.modifierFlags
+            if f.contains(.control) { mods.insert(.leftCtrl) }
+            if f.contains(.shift) { mods.insert(.leftShift) }
+            if f.contains(.option) { mods.insert(.leftAlt) }
+            if f.contains(.command) { mods.insert(.leftGui) }
+        }
+        return mods
+    }
+
     private func action(matchingUsage usage: UInt8, modifiers: Modifier) -> InputAction? {
+        let wanted = modifiers.normalised
         for control in layout.controls {
             for action in control.actions {
                 if case .keys(let sequence, _) = profile[layer, action],
                    let first = sequence.first,
-                   first.usage == usage, first.modifiers == modifiers {
+                   first.usage == usage, first.modifiers.normalised == wanted {
                     return action
                 }
             }
@@ -481,17 +547,7 @@ final class AppModel: ObservableObject {
         }
         guard let usage = HIDKeyboard.virtualKeyToUsage[event.keyCode] else { return }
 
-        var mods = HIDKeyboard.modifiers(from: event.modifierFlags.rawValue)
-        if mods.isEmpty {
-            // Fall back to the layout-independent flags if the device-specific
-            // bits are missing (some synthetic events don't carry them).
-            let f = event.modifierFlags
-            if f.contains(.control) { mods.insert(.leftCtrl) }
-            if f.contains(.shift) { mods.insert(.leftShift) }
-            if f.contains(.option) { mods.insert(.leftAlt) }
-            if f.contains(.command) { mods.insert(.leftGui) }
-        }
-
+        let mods = AppModel.modifiers(from: event)
         sequence.append(KeyStroke(usage: usage, modifiers: mods))
         editorTab = .keys
         commit()

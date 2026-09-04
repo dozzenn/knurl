@@ -110,6 +110,19 @@ public struct Modifier: OptionSet, Codable, Hashable, Sendable {
 
     public static let none: Modifier = []
 
+    /// Left and right folded together.
+    ///
+    /// Which side a modifier came from is a detail of how an event was
+    /// reported, not of what the user meant, so comparisons work on this.
+    public var normalised: Modifier {
+        var m: Modifier = []
+        if contains(.leftCtrl) || contains(.rightCtrl) { m.insert(.leftCtrl) }
+        if contains(.leftAlt) || contains(.rightAlt) { m.insert(.leftAlt) }
+        if contains(.leftShift) || contains(.rightShift) { m.insert(.leftShift) }
+        if contains(.leftGui) || contains(.rightGui) { m.insert(.leftGui) }
+        return m
+    }
+
     /// Short symbolic description, e.g. "⌃⇧".
     public var symbols: String {
         var s = ""

@@ -61,6 +61,10 @@ struct MenuBarPanel: View {
         }
         .padding(.vertical, 8)
         .frame(width: 300)
+        // MenuBarExtra hands its content a light system material, so the panel
+        // has to paint its own ground or the light-on-dark palette inverts.
+        .background(PopoverBackground())
+        .preferredColorScheme(.dark)
     }
 
     private var header: some View {

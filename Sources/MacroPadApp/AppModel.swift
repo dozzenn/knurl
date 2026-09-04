@@ -179,6 +179,8 @@ final class AppModel: ObservableObject {
         }
         nicknames = (UserDefaults.standard.dictionary(forKey: Self.nicknameKey) as? [String: String]) ?? [:]
         activeProfileName = UserDefaults.standard.string(forKey: "activeProfileName")
+        loadRules()
+        if autoSwitchEnabled { startWatchingApps() }
         transport.startMonitoring()
         deviceListChanged()
         refreshProfiles()
@@ -706,6 +708,101 @@ final class AppModel: ObservableObject {
             run: { [weak self] in self?.exportPreset() }
         ))
         return out
+    }
+
+    // MARK: - Per-app profiles
+
+    struct AppRule: Codable, Identifiable, Hashable {
+        var bundleId: String
+        var appName: String
+        var profileName: String
+        var id: String { bundleId }
+    }
+
+    @Published private(set) var appRules: [AppRule] = [] {
+        didSet {
+            if let data = try? JSONEncoder().encode(appRules) {
+                UserDefaults.standard.set(data, forKey: "appRules")
+            }
+        }
+    }
+
+    @Published var autoSwitchEnabled: Bool = UserDefaults.standard.bool(forKey: "autoSwitchEnabled") {
+        didSet {
+            UserDefaults.standard.set(autoSwitchEnabled, forKey: "autoSwitchEnabled")
+            autoSwitchEnabled ? startWatchingApps() : stopWatchingApps()
+        }
+    }
+
+    private var workspaceObserver: Any?
+
+    func addRule(bundleId: String, appName: String, profileName: String) {
+        appRules.removeAll { $0.bundleId == bundleId }
+        appRules.append(AppRule(bundleId: bundleId, appName: appName, profileName: profileName))
+        appRules.sort { $0.appName.localizedStandardCompare($1.appName) == .orderedAscending }
+    }
+
+    func removeRule(_ rule: AppRule) {
+        appRules.removeAll { $0.id == rule.id }
+    }
+
+    private func loadRules() {
+        guard let data = UserDefaults.standard.data(forKey: "appRules"),
+              let decoded = try? JSONDecoder().decode([AppRule].self, from: data) else { return }
+        appRules = decoded
+    }
+
+    func startWatchingApps() {
+        guard workspaceObserver == nil else { return }
+        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let bundleId = app?.bundleIdentifier
+            Task { @MainActor in self?.frontmostAppChanged(to: bundleId) }
+        }
+    }
+
+    func stopWatchingApps() {
+        if let workspaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver)
+        }
+        workspaceObserver = nil
+    }
+
+    private func frontmostAppChanged(to bundleId: String?) {
+        guard autoSwitchEnabled, isConnected,
+              let bundleId,
+              let rule = appRules.first(where: { $0.bundleId == bundleId }) else { return }
+        // Every write is a write to the keypad's flash, so a profile that is
+        // already loaded is left alone.
+        guard rule.profileName != activeProfileName,
+              let entry = profiles.first(where: { $0.name == rule.profileName }) else { return }
+        switchTo(entry)
+    }
+
+    // MARK: - Templates
+
+    /// Lays a template over the whole pad and, if a keypad is connected, writes
+    /// it immediately — choosing a template should produce a working keypad,
+    /// not homework.
+    func apply(_ template: MacroTemplate) {
+        isRecording = false
+        var next = Profile(name: template.name, layoutName: layout.name)
+        template.apply(to: &next, layout: layout, layer: layer)
+        next.ledMode = profile.ledMode
+        next.ledColor = profile.ledColor
+        profile = next
+        activeProfileName = nil
+        loadedFromDevice = false
+        loadEditor()
+
+        if isConnected {
+            saveToKeyboard()
+        } else {
+            setStatus("Loaded “\(template.name)” — connect the keypad to write it")
+        }
     }
 
     // MARK: - Presets

@@ -466,18 +466,28 @@ private struct WebHubBacklightEditor: View {
         }
 
         if !model.backlight.isOff {
-            SectionLabel(text: "Brightness")
-            StepRow(value: Binding(
-                get: { Int(model.backlight.brightness) },
-                set: { model.backlight.brightness = UInt8($0); model.applyBacklight() }
-            ), maximum: Int(BacklightState.maxBrightness))
+            LabeledSlider(title: "Brightness",
+                          readout: "\(model.backlight.brightness)",
+                          value: Binding(
+                            get: { Double(model.backlight.brightness) },
+                            set: { model.backlight.brightness = UInt8($0.rounded()) }
+                          ),
+                          range: 0...Double(BacklightState.maxBrightness),
+                          ticks: Int(BacklightState.maxBrightness) + 1) {
+                model.applyBacklight()
+            }
 
             if model.backlight.usesSpeed {
-                SectionLabel(text: "Speed")
-                StepRow(value: Binding(
-                    get: { Int(model.backlight.speed) },
-                    set: { model.backlight.speed = UInt8($0); model.applyBacklight() }
-                ), maximum: Int(BacklightState.maxSpeed))
+                LabeledSlider(title: "Speed",
+                              readout: "\(model.backlight.speed)",
+                              value: Binding(
+                                get: { Double(model.backlight.speed) },
+                                set: { model.backlight.speed = UInt8($0.rounded()) }
+                              ),
+                              range: 0...Double(BacklightState.maxSpeed),
+                              ticks: Int(BacklightState.maxSpeed) + 1) {
+                    model.applyBacklight()
+                }
             }
 
             if model.backlight.usesColor {
@@ -490,11 +500,11 @@ private struct WebHubBacklightEditor: View {
                 .padding(.horizontal, 3)
 
                 if model.backlight.color == 1 {
-                    HueSlider(hue: Binding(
+                    HueBand(hue: Binding(
                         get: { Double(model.backlight.hue) },
                         set: { model.backlight.hue = UInt8($0) }
                     ), onCommit: { model.applyBacklight() })
-                    .padding(.top, 10)
+                    .padding(.top, 12)
                     .padding(.horizontal, 3)
                 }
             }
@@ -511,57 +521,34 @@ private struct WebHubBacklightEditor: View {
     }
 }
 
-/// A small 0…n stepper drawn as segments, which reads better than a slider for
-/// a range this short.
-private struct StepRow: View {
-    @Binding var value: Int
-    let maximum: Int
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0...maximum, id: \.self) { step in
-                Button {
-                    value = step
-                } label: {
-                    Text("\(step)")
-                        .font(.system(size: 12, weight: value == step ? .semibold : .regular))
-                        .foregroundStyle(value == step ? Theme.text : Theme.textFaint)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 26)
-                        .background(
-                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                                .fill(value == step ? Theme.accent.opacity(0.26) : Theme.fill)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                                .strokeBorder(value == step ? Theme.accent.opacity(0.5) : Theme.hairline,
-                                              lineWidth: 1)
-                        )
-                }
-                .buttonStyle(PressableStyle())
-            }
-        }
-        .padding(.horizontal, 3)
-    }
-}
-
-private struct HueSlider: View {
-    @Binding var hue: Double
+/// A section header with its current value on the right, over a slider — so the
+/// number is there when you want it and out of the way when you don't.
+private struct LabeledSlider: View {
+    let title: String
+    let readout: String
+    @Binding var value: Double
+    var range: ClosedRange<Double>
+    var ticks: Int
     let onCommit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Slider(value: $hue, in: 0...255, step: 1, onEditingChanged: { editing in
-                if !editing { onCommit() }
-            })
-            .controlSize(.small)
-            .tint(Color(hue: hue / 255, saturation: 0.85, brightness: 1))
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(Theme.sectionLabel)
+                    .tracking(0.3)
+                    .foregroundStyle(Theme.textFaint)
+                Spacer()
+                Text(readout)
+                    .font(Theme.mono)
+                    .foregroundStyle(Theme.textMuted)
+            }
+            .padding(.horizontal, 3)
 
-            LinearGradient(colors: (0...12).map { Color(hue: Double($0) / 12, saturation: 0.85, brightness: 1) },
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(height: 6)
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+            GlassSlider(value: $value, range: range, ticks: ticks, onCommit: onCommit)
+                .padding(.horizontal, 3)
         }
+        .padding(.top, 12)
     }
 }
 

@@ -394,3 +394,146 @@ struct PopoverBackground: View {
             .ignoresSafeArea()
     }
 }
+
+// MARK: - Tactile controls
+
+/// A slider you feel rather than read.
+///
+/// Tracks the pointer 1:1 from the moment it goes down — no animation on the
+/// drag itself, because the value must sit under the finger. The knob grows
+/// slightly while held, which is the only cue that needs motion.
+struct GlassSlider: View {
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...1
+    /// Number of tick dots under the track; 0 hides them.
+    var ticks: Int = 0
+    var tint: Color = Theme.accent
+    var onCommit: (() -> Void)?
+
+    @State private var dragging = false
+
+    private var fraction: Double {
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0 }
+        return min(1, max(0, (value - range.lowerBound) / span))
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let knob: CGFloat = dragging ? 20 : 17
+
+                ZStack(alignment: .leading) {
+                    // Track: a shallow well, darker than the surface it sits on.
+                    Capsule()
+                        .fill(Color.black.opacity(0.28))
+                        .frame(height: 7)
+                        .overlay(
+                            Capsule().strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+                        )
+
+                    Capsule()
+                        .fill(LinearGradient(colors: [tint.opacity(0.75), tint],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(7, w * fraction), height: 7)
+
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: knob, height: knob)
+                        .overlay(
+                            Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
+                        )
+                        .shadow(color: .black.opacity(0.45), radius: dragging ? 5 : 3, y: 1)
+                        .offset(x: (w - knob) * fraction)
+                }
+                .frame(height: 22)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in
+                            dragging = true
+                            update(to: g.location.x, width: w, knob: knob)
+                        }
+                        .onEnded { _ in
+                            dragging = false
+                            onCommit?()
+                        }
+                )
+            }
+            .frame(height: 22)
+
+            if ticks > 1 {
+                HStack(spacing: 0) {
+                    ForEach(0..<ticks, id: \.self) { i in
+                        Circle()
+                            .fill(Theme.textFaint.opacity(0.55))
+                            .frame(width: 2.5, height: 2.5)
+                        if i < ticks - 1 { Spacer(minLength: 0) }
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+        }
+        .animation(Theme.press, value: dragging)
+    }
+
+    private func update(to x: CGFloat, width: CGFloat, knob: CGFloat) {
+        let usable = max(1, width - knob)
+        let f = min(1, max(0, (x - knob / 2) / usable))
+        value = range.lowerBound + f * (range.upperBound - range.lowerBound)
+    }
+}
+
+/// One wide band of colour. The gradient is the track, so there is nothing to
+/// read off a second strip — the control and its meaning are the same object.
+struct HueBand: View {
+    @Binding var hue: Double          // 0…255, as the firmware stores it
+    var saturation: Double = 1
+    var onCommit: (() -> Void)?
+
+    @State private var dragging = false
+
+    private var fraction: Double { min(1, max(0, hue / 255)) }
+    private var current: Color { Color(hue: fraction, saturation: saturation, brightness: 1) }
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let knob: CGFloat = dragging ? 26 : 23
+
+            ZStack(alignment: .leading) {
+                LinearGradient(colors: (0...24).map {
+                    Color(hue: Double($0) / 24, saturation: saturation, brightness: 1)
+                }, startPoint: .leading, endPoint: .trailing)
+                .frame(height: 26)
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+                .shadow(color: .black.opacity(0.28), radius: 3, y: 1)
+
+                Circle()
+                    .fill(current)
+                    .frame(width: knob, height: knob)
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 2.5))
+                    .shadow(color: .black.opacity(0.5), radius: dragging ? 5 : 3, y: 1)
+                    .offset(x: (w - knob) * fraction)
+            }
+            .frame(height: 30)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        dragging = true
+                        let usable = max(1, w - knob)
+                        hue = min(255, max(0, (g.location.x - knob / 2) / usable * 255))
+                    }
+                    .onEnded { _ in
+                        dragging = false
+                        onCommit?()
+                    }
+            )
+        }
+        .frame(height: 30)
+        .animation(Theme.press, value: dragging)
+    }
+}

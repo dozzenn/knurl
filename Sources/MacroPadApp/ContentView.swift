@@ -4,6 +4,8 @@ import MacroPadCore
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showLog = false
+    @State private var showTemplates = false
+    @AppStorage("hasSeenTemplates") private var hasSeenTemplates = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +28,20 @@ struct ContentView: View {
             }
 
             Hairline()
-            BottomBar(showLog: $showLog)
+            BottomBar(showLog: $showLog, showTemplates: $showTemplates)
+        }
+        .sheet(isPresented: $showTemplates) {
+            TemplateGallery().environmentObject(model)
+        }
+        .onAppear {
+            // Offer templates once, to a pad that has nothing on it yet.
+            guard !hasSeenTemplates else { return }
+            hasSeenTemplates = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                if model.profile.configured(layerCount: model.layout.layerCount).isEmpty {
+                    showTemplates = true
+                }
+            }
         }
     }
 }
@@ -228,6 +243,7 @@ private struct ProfileCard: View {
 private struct ProfilePopover: View {
     @EnvironmentObject private var model: AppModel
     @State private var showSaveSheet = false
+    @State private var showRules = false
     @State private var newName = ""
 
     var body: some View {
@@ -271,6 +287,15 @@ private struct ProfilePopover: View {
             }
 
             Divider().background(Theme.hairline).padding(.vertical, 8)
+            SectionLabel(text: "Automatic")
+
+            Row(title: "Switch by app…",
+                subtitle: model.autoSwitchEnabled ? "on, \(model.appRules.count) rule\(model.appRules.count == 1 ? "" : "s")" : "off",
+                icon: "app.badge") {
+                showRules = true
+            }
+
+            Divider().background(Theme.hairline).padding(.vertical, 8)
             SectionLabel(text: "Presets")
 
             Row(title: "Import preset…", subtitle: "from a file", icon: "square.and.arrow.down") {
@@ -285,6 +310,9 @@ private struct ProfilePopover: View {
         .background(PopoverBackground())
         .sheet(isPresented: $showSaveSheet) {
             SaveProfileSheet(name: $newName) { model.saveProfile(named: $0) }
+        }
+        .sheet(isPresented: $showRules) {
+            AppRulesSheet().environmentObject(model)
         }
     }
 }
@@ -332,6 +360,7 @@ private struct SaveProfileSheet: View {
 private struct BottomBar: View {
     @EnvironmentObject private var model: AppModel
     @Binding var showLog: Bool
+    @Binding var showTemplates: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -346,6 +375,7 @@ private struct BottomBar: View {
 
             Spacer(minLength: 12)
 
+            BarAction(title: "Templates") { showTemplates = true }
             BarAction(title: "HID log", prominent: showLog) { showLog.toggle() }
             Rectangle().fill(Theme.hairline).frame(width: 1, height: 18)
             BarAction(title: "Save this key", keys: ["⌥", "⌘", "S"]) { model.saveSelectedKey() }

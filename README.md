@@ -8,6 +8,10 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
 
 ## What it does
 
+* Templates that fill the whole pad at once — music, clipboard, design, video
+  editing, screenshots, browser tabs
+* Per-app profiles: the keypad follows whichever app is in front
+
 * Lives in the menu bar, with a command palette on ⌃⌥⌘K for switching profiles
   from any app without opening the window
 
@@ -62,6 +66,19 @@ Give the keypad a nickname from the device card in the top left, and keep whole
 sets of mappings as profiles from the card next to it — switching a profile
 writes it to the hardware. Profiles can also be exported to and imported from
 files as presets.
+
+## Templates and per-app profiles
+
+Templates are written against slots rather than a specific pad — buttons are
+filled in order and the knob gets its three actions — so the same template lands
+sensibly on a three-key pad and a twelve-key one. Choosing one writes it to the
+keypad immediately. Each card lists exactly what it will put on every key, and
+templates whose shortcuts are app-specific say so.
+
+**Switch by app** in the profile card ties a bundle identifier to a saved
+profile and loads it when that app comes to the front. Every switch is a write
+to the keypad's flash, so a profile that is already loaded is skipped rather
+than rewritten.
 
 ## Menu bar and the command palette
 

@@ -153,9 +153,11 @@ public enum TemplateLibrary {
             knob: [
                 .init("Zoom out", k(U.minus, cmd)),
                 .init("Zoom to 100%", k(U.one, cmd)),
-                .init("Zoom in", k(U.equal, cmd)),
+                // Apps bind zoom in to ⌘+, which on a Mac keyboard means
+                // shift and the equals key. Plain ⌘= is not bound in Figma.
+                .init("Zoom in", k(U.equal, [cmd, shift])),
             ],
-            note: "Zoom and fit shortcuts differ between Figma, Photoshop and Illustrator — adjust any key that does not match yours."
+            note: "Fit sends ⇧⌘1, which suits Figma; Photoshop and Illustrator use ⌘0. Change that key if yours differs."
         ),
 
         MacroTemplate(

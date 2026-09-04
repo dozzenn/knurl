@@ -277,8 +277,14 @@ struct AppsSection: View {
                                     PanelLabel(text: "empty", colour: Theme.textFaint, size: 9)
                                 }
 
-                                PanelButton(title: "Edit", compact: true) {
-                                    model.selectScope(scope.key)
+                                if model.currentScopeKey == scope.key {
+                                    PanelLabel(text: "editing", colour: Theme.text, size: 9)
+                                    Lamp(on: true, colour: Theme.lampOn, size: 7)
+                                } else {
+                                    PanelButton(title: "Edit", compact: true) {
+                                        model.selectScope(scope.key)
+                                        model.section = .keys
+                                    }
                                 }
                                 if !scope.isGlobal {
                                     PanelButton(title: "Remove", compact: true) {
@@ -288,6 +294,11 @@ struct AppsSection: View {
                             }
                             .padding(.horizontal, 10)
                             .frame(height: 46)
+                            .background(
+                                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                                    .fill(model.currentScopeKey == scope.key
+                                          ? Theme.rowSelected : .clear)
+                            )
                         }
                     }
 

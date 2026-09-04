@@ -256,6 +256,28 @@ private struct SectionHeader: View {
                 .font(Theme.heading)
                 .foregroundStyle(Theme.text)
 
+            if section == .keys {
+                // Which set the edits below land in. Without this the window
+                // looks the same whichever app you picked.
+                HStack(spacing: 6) {
+                    PanelLabel(text: "for", colour: Theme.textOnWellMuted, size: 9)
+                    if model.currentScope.isGlobal {
+                        Image(systemName: "globe")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.textOnWell)
+                    } else if let icon = appIcon(for: model.currentScope.key) {
+                        Image(nsImage: icon).resizable().frame(width: 14, height: 14)
+                    }
+                    Text(model.currentScope.name.uppercased())
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .tracking(0.9)
+                        .foregroundStyle(Theme.textOnWell)
+                }
+                .padding(.horizontal, 9)
+                .frame(height: 26)
+                .well(radius: Theme.radiusSmall)
+            }
+
             Spacer(minLength: 12)
 
             if section == .keys || section == .backlight {
@@ -298,7 +320,7 @@ struct ScopeStrip: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            PanelLabel(text: "applies to", colour: Theme.textFaint)
+            PanelLabel(text: "editing keys for", colour: Theme.textFaint)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 5) {
                     ForEach(model.scopes) { scope in
@@ -382,6 +404,7 @@ func pickApp(_ model: AppModel) {
         ?? (bundle.infoDictionary?["CFBundleName"] as? String)
         ?? url.deletingPathExtension().lastPathComponent
     model.addAppScope(bundleId: id, name: name)
+    model.section = .keys
 }
 
 // MARK: - Status strip

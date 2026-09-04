@@ -550,7 +550,14 @@ struct Row<Trailing: View>: View {
                 .fill(selected ? Color.black.opacity(0.10) : (hovering ? Color.black.opacity(0.05) : .clear))
         )
         .contentShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+        // `onHover` does not fire reliably inside a menu bar panel; the
+        // continuous variant tracks through it.
+        .onContinuousHover { phase in
+            let inside: Bool
+            if case .active = phase { inside = true } else { inside = false }
+            guard inside != hovering else { return }
+            withAnimation(Theme.hover) { hovering = inside }
+        }
         .onTapGesture { action?() }
     }
 }

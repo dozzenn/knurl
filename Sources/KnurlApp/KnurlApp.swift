@@ -3,6 +3,7 @@ import KnurlCore
 
 @main
 struct KnurlApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
 
     var body: some Scene {
@@ -22,10 +23,7 @@ struct KnurlApp: App {
             // Settings are a section of the window's own sidebar, so the app
             // menu points there rather than opening a second window.
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
-                    NSApp.activate(ignoringOtherApps: true)
-                    NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
-                }
+                Button("Settings…") { AppDelegate.showMainWindow() }
                 .keyboardShortcut(",", modifiers: [.command])
             }
             CommandMenu("Keypad") {

@@ -36,11 +36,10 @@ struct MenuBarPanel: View {
 
             Hairline().padding(.vertical, 6)
 
-            Row(title: "Save to keypad", icon: "arrow.down.circle") { model.saveToKeyboard() }
-            Row(title: "Open Knurl", icon: "macwindow") {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
-            }
+            Row(title: "Save to keypad",
+                subtitle: model.isConnected ? nil : "connect first",
+                icon: "arrow.down.circle") { model.saveToKeyboard() }
+            Row(title: "Open Knurl", icon: "macwindow") { AppDelegate.showMainWindow() }
             Row(title: "Quit", icon: "power") { NSApp.terminate(nil) }
         }
         .padding(.vertical, 8)

@@ -10,6 +10,28 @@ that project does not cover.
 
 No installer, no drivers, no `hidapi`. Just `Knurl.app`.
 
+## Install
+
+Download `Knurl.zip` from [Releases](../../releases), unzip it, and move
+`Knurl.app` to your Applications folder.
+
+**The first launch needs one extra step.** Knurl is not signed with an Apple
+Developer ID — that needs a paid account — so macOS will refuse to open it and
+say it is damaged or from an unidentified developer. It is neither; the message
+is what macOS says about any app it cannot check a signature for.
+
+Right-click the app and choose **Open**, then **Open** again in the dialog. You
+only have to do this once. If macOS still refuses, run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Knurl.app
+```
+
+That removes the quarantine flag the browser attached to the download. Do not
+run that on software you have not decided to trust — here, you can read every
+line of what you are running in this repository, and build it yourself with
+`./scripts/build-app.sh` if you would rather not take the binary.
+
 ## What it does
 
 * Templates that fill the whole pad at once — music, clipboard, design, video
@@ -196,6 +218,24 @@ interfaces** in the device menu to pick one by hand.
 composers, the IOKit transport, the HID usage tables, the pad layouts.
 `Sources/KnurlApp` is the SwiftUI front end. `Sources/knurl-probe` is the
 CLI.
+
+## Adding a keypad
+
+If your pad is not recognised, the diagnostic CLI will say what it looks like:
+
+```bash
+swift build
+.build/debug/knurl-probe interfaces   # every HID interface on the machine
+.build/debug/knurl-probe list         # the ones that could carry a config frame
+```
+
+A pad this app can drive has a vendor-defined interface (usage page `FF00`) with
+64-byte reports, alongside the plain keyboard interfaces it types through. If
+yours only has keyboard interfaces, it is configured some other way — over
+Bluetooth, or by a drive it exposes — and none of this will reach it.
+
+Issues and pull requests with new vendor/product ids are welcome, especially
+with the output of `knurl-probe interfaces` attached.
 
 ## Licence
 

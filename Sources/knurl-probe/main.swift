@@ -278,6 +278,20 @@ case "setlight":
     RunLoop.current.run(until: Date().addingTimeInterval(0.6))
     transport.close()
 
+case "layout":
+    // Which physical key types a given character on the layout in use.
+    let wanted = args.count > 1 ? Array(args[1]) : Array("+-=0123456789zZ")
+    for character in wanted {
+        if let r = LayoutResolver.resolve(character) {
+            print(String(format: "  '%@' → HID 0x%02X  %@%@",
+                         String(character), r.usage,
+                         HIDKeyboard.name(for: r.usage),
+                         r.needsShift ? "  (needs shift)" : ""))
+        } else {
+            print("  '\(character)' → not on this layout")
+        }
+    }
+
 case "access":
     // macOS gates input reports from keyboard-usage devices behind Input
     // Monitoring. Ask the system rather than guessing from silence.

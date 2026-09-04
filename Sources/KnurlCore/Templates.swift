@@ -8,11 +8,41 @@ import Foundation
 /// template lands sensibly on a three-key pad and a twelve-key one.
 public struct MacroTemplate: Identifiable, Sendable {
     public struct Step: Sendable {
+        /// What a step asks for. A position is fixed; a character is resolved
+        /// against whatever keyboard layout the user has, because punctuation
+        /// sits in different places on different layouts.
+        enum Request: Sendable {
+            case position(ControlBinding)
+            case character(Character, Modifier, fallback: UInt8)
+        }
+
         public let label: String
-        public let binding: ControlBinding
+        let request: Request
+
         public init(_ label: String, _ binding: ControlBinding) {
             self.label = label
-            self.binding = binding
+            self.request = .position(binding)
+        }
+
+        init(_ label: String, character: Character, modifiers: Modifier, fallback: UInt8) {
+            self.label = label
+            self.request = .character(character, modifiers, fallback: fallback)
+        }
+
+        public var binding: ControlBinding {
+            switch request {
+            case .position(let binding):
+                return binding
+            case .character(let character, let modifiers, let fallback):
+                guard let resolved = LayoutResolver.resolve(character) else {
+                    return .keys(sequence: [KeyStroke(usage: fallback, modifiers: modifiers)],
+                                 delay: 0)
+                }
+                var mods = modifiers
+                if resolved.needsShift { mods.insert(.leftShift) }
+                return .keys(sequence: [KeyStroke(usage: resolved.usage, modifiers: mods)],
+                             delay: 0)
+            }
         }
     }
 
@@ -76,6 +106,14 @@ public struct MacroTemplate: Identifiable, Sendable {
 
 private func k(_ usage: UInt8, _ modifiers: Modifier = .none) -> ControlBinding {
     .keys(sequence: [KeyStroke(usage: usage, modifiers: modifiers)], delay: 0)
+}
+
+/// A step that types a character, wherever that character lives on this
+/// keyboard. `fallback` is the US position, used only if the layout cannot be
+/// read at all.
+private func typing(_ label: String, _ character: Character,
+                    _ modifiers: Modifier, fallback: UInt8) -> MacroTemplate.Step {
+    MacroTemplate.Step(label, character: character, modifiers: modifiers, fallback: fallback)
 }
 
 private func m(_ name: String) -> ControlBinding {
@@ -151,11 +189,9 @@ public enum TemplateLibrary {
                 .init("Fit to screen", k(U.one, [cmd, shift])),
             ],
             knob: [
-                .init("Zoom out", k(U.minus, cmd)),
+                typing("Zoom out", "-", cmd, fallback: U.minus),
                 .init("Zoom to 100%", k(U.one, cmd)),
-                // Apps bind zoom in to ⌘+, which on a Mac keyboard means
-                // shift and the equals key. Plain ⌘= is not bound in Figma.
-                .init("Zoom in", k(U.equal, [cmd, shift])),
+                typing("Zoom in", "+", cmd, fallback: U.equal),
             ],
             note: "Fit sends ⇧⌘1, which suits Figma; Photoshop and Illustrator use ⌘0. Change that key if yours differs."
         ),

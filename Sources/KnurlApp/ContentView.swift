@@ -304,12 +304,50 @@ private struct KeysSection: View {
     private var content: some View {
         VStack(spacing: 0) {
             ScopeStrip()
+            if !model.currentScope.isGlobal {
+                ScopeNotice()
+            }
             Hairline()
             HStack(spacing: 0) {
                 PadPane().frame(maxWidth: .infinity)
                 Rectangle().fill(Theme.outline.opacity(0.3)).frame(width: 1)
                 InspectorPane().frame(width: 344)
             }
+        }
+    }
+}
+
+/// Said out loud, because the difference between editing Global and editing one
+/// app is invisible otherwise — the pad looks the same either way.
+struct ScopeNotice: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let icon = appIcon(for: model.currentScope.key) {
+                Image(nsImage: icon).resizable().frame(width: 18, height: 18)
+            } else {
+                Image(systemName: "app.fill")
+                    .foregroundStyle(Theme.textOnWell)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Editing \(model.currentScope.name)")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Theme.textOnWell)
+                Text("These keys apply only while \(model.currentScope.name) is in front.")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Theme.textOnWellMuted)
+            }
+            Spacer(minLength: 8)
+            PanelButton(title: "Back to Global", compact: true) {
+                model.selectScope(MappingScope.globalKey)
+            }
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 9)
+        .background(Theme.well)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.lampOn).frame(height: 2)
         }
     }
 }

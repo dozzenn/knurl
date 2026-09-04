@@ -319,6 +319,20 @@ struct PresetsSection: View {
     @State private var name = ""
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Choosing a set and choosing where it goes are one decision, so
+            // they belong on one screen.
+            ScopeStrip()
+            if !model.currentScope.isGlobal { ScopeNotice() }
+            Hairline()
+            body(inScrollView: true)
+        }
+        .sheet(isPresented: $showSave) {
+            SavePresetSheet(name: $name) { model.savePreset(named: $0, summary: $1) }
+        }
+    }
+
+    private func body(inScrollView: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Panel(title: "Your presets") {
@@ -367,9 +381,6 @@ struct PresetsSection: View {
                 }
             }
             .padding(Theme.gutter)
-        }
-        .sheet(isPresented: $showSave) {
-            SavePresetSheet(name: $name) { model.savePreset(named: $0, summary: $1) }
         }
     }
 

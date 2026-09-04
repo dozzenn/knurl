@@ -91,11 +91,19 @@ Connecting reads the key table off the keypad, but only *adopts* it into a scope
 that is still empty — once you have set keys, your work outranks whatever the
 pad happens to be carrying.
 
-## Menu bar
+## One window
 
-The menu bar item shows whether a keypad is connected and writes any key set to
-it in one click. The Dock icon can be turned off in Settings so the app lives in
-the menu bar alone.
+Everything lives in a single window with its sections down the left: Keys,
+Backlight, Apps, Presets, Stats, General and About. Settings are a section
+there rather than a separate ⌘, window, so every switch the app has can be
+found by looking rather than by remembering a menu. The menu bar item is a
+shortcut to switching key sets, not the only route to anything.
+
+The surface is a control panel: a light neutral ground, parts lifted off it by
+a light from the top-left and a thin dark outline, dark wells for anything that
+holds data, monospaced labels in small caps, and indicator lamps that light up.
+Readouts and the wordmark are plotted as dot fields rather than typeset, because
+macOS ships no pixel face.
 
 ## Press counts
 

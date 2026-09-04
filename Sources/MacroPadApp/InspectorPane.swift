@@ -1,8 +1,8 @@
 import SwiftUI
 import MacroPadCore
 
-/// What the selected control does. One column, dense rows, no nested cards —
-/// the surface stays flat so the eye goes straight to the sequence.
+/// What the selected control does. One column of panels, so the eye goes
+/// straight to the shortcut and everything else is subordinate to it.
 struct InspectorPane: View {
     @EnvironmentObject private var model: AppModel
 
@@ -12,54 +12,52 @@ struct InspectorPane: View {
             Hairline()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 14) {
                     if let note = model.unsupportedNote {
-                        EmptyStateView(icon: "exclamationmark.triangle",
-                                       title: "Not supported on this device",
-                                       message: note)
+                        Panel(title: "Not supported") {
+                            Text(note)
+                                .font(Theme.rowDetail)
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     } else {
                         switch model.editorTab {
                         case .keys:  KeysEditor()
                         case .media: MediaEditor()
                         case .mouse: MouseEditor()
-                        case .led:   LedEditor()
+                        case .led:   Panel(title: "Backlight") {
+                            Text("The backlight is a whole-keypad setting — it lives in the Backlight section.")
+                                .font(Theme.rowDetail)
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         }
                     }
                 }
-                .padding(.horizontal, Theme.gutter)
-                .padding(.bottom, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Theme.gutter)
             }
         }
-        .background(Theme.groundDeep.opacity(0.55))
     }
 
     private var head: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Text(model.selectedAction.displayName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(-0.2)
+                    .font(.system(size: 15, weight: .medium, design: .monospaced))
                     .foregroundStyle(Theme.text)
                 Spacer()
                 if model.binding(for: model.selectedAction).isSet {
-                    Button {
-                        model.clearBinding()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.textFaint)
-                    }
-                    .buttonStyle(PressableStyle())
-                    .help("Clear this mapping")
+                    PanelButton(title: "Clear", compact: true) { model.clearBinding() }
                 }
             }
 
-            Segmented(selection: $model.editorTab,
-                      items: EditorTab.allCases.map { ($0, $0.title, $0.icon) })
+            SegmentedSwitch(selection: $model.editorTab,
+                            items: [(EditorTab.keys, "Keys"),
+                                    (EditorTab.media, "Media"),
+                                    (EditorTab.mouse, "Mouse")])
         }
         .padding(.horizontal, Theme.gutter)
-        .padding(.vertical, 11)
+        .padding(.vertical, 12)
     }
 }
 
@@ -69,140 +67,121 @@ private struct KeysEditor: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        SectionLabel(text: "Shortcut")
-        SequenceStrip()
+        Panel(title: "Shortcut") {
+            SequenceWell()
 
-        RecordButton()
-            .padding(.top, 8)
+            HStack(spacing: 8) {
+                RecordButton()
+                PanelButton(title: "Backspace", compact: true) { model.removeLastKey() }
+                    .disabled(model.sequence.isEmpty)
+                    .opacity(model.sequence.isEmpty ? 0.4 : 1)
+                Spacer()
+                Readout(text: "\(model.sequence.count)/\(model.maxKeystrokes)")
+            }
+            .padding(.top, 10)
 
-        HStack(spacing: 8) {
             Text(hint)
-                .font(.system(size: 11))
+                .font(Theme.rowDetail)
                 .foregroundStyle(Theme.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 6)
-            if !model.sequence.isEmpty {
-                Button("Clear") { model.clearBinding() }
-                    .buttonStyle(BarButtonStyle())
-            }
+                .padding(.top, 8)
         }
-        .padding(.horizontal, 3)
-        .padding(.top, 7)
 
-        ManualKeySection()
+        Panel(title: "Key your Mac can't type") {
+            Text("F13–F24, Print Screen, Num Lock and the numeric keypad have no key on a Mac keyboard, so pick them here instead of recording.")
+                .font(Theme.rowDetail)
+                .foregroundStyle(Theme.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 4)
+            ManualKeyRow()
+        }
 
         if model.layout.supportsDelay {
-            SectionLabel(text: "Repeat delay")
-            HStack(spacing: 10) {
-                Slider(value: Binding(
+            Panel(title: "Repeat delay", readout: "\(model.delay) ms") {
+                PanelSlider(value: Binding(
                     get: { Double(model.delay) },
-                    set: { model.delay = UInt16($0); model.commit() }
-                ), in: 0...2000, step: 10)
-                .controlSize(.small)
-                .tint(Theme.accent)
-                Text("\(model.delay) ms")
-                    .font(Theme.mono)
-                    .foregroundStyle(Theme.textMuted)
-                    .frame(width: 54, alignment: .trailing)
+                    set: { model.delay = UInt16($0) }
+                ), range: 0...2000) { model.commit() }
             }
-            .padding(.horizontal, 9)
         }
     }
 
     private var hint: String {
         if model.isRecording {
-            return "Keys you press are captured here instead of doing what they normally do."
+            return "Keys you press are captured here instead of doing what they normally do. Escape leaves."
         }
-        if model.maxKeystrokes == 1 {
-            return "This keypad stores one shortcut per key."
-        }
+        if model.maxKeystrokes == 1 { return "This keypad stores one shortcut per key." }
         return "Up to \(model.maxKeystrokes) keystrokes, played back in order."
     }
 }
 
-/// Recording is a mode, so the control states plainly which mode you are in and
-/// what will happen next — "Start recording" rather than a bare "Record".
 private struct RecordButton: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovering = false
-    @State private var pulsing = false
 
     var body: some View {
-        Button {
-            model.isRecording.toggle()
-        } label: {
+        Button { model.isRecording.toggle() } label: {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(model.isRecording ? Theme.accent : Theme.textMuted)
-                    .frame(width: 8, height: 8)
-                    .opacity(model.isRecording && pulsing && !reduceMotion ? 0.35 : 1)
-                Text(model.isRecording ? "Stop recording" : "Start recording")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                Spacer()
-                ShortcutHint(keys: model.isRecording ? ["esc"] : [], emphasized: false)
+                Lamp(on: model.isRecording, colour: Theme.lampAlert, size: 8)
+                Text(model.isRecording ? "STOP RECORDING" : "START RECORDING")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .tracking(0.9)
+                    .foregroundStyle(model.isRecording ? Theme.textOnWell : Theme.text)
             }
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .frame(height: 36)
-            .raised(radius: Theme.radius, depth: 0.7, pressed: model.isRecording)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .strokeBorder(model.isRecording ? Theme.accent.opacity(0.7) : .clear, lineWidth: 1.5)
-            )
-            .activeGlow(Theme.accent, on: model.isRecording, radius: 8)
+            .frame(height: 32)
+            .modifier(RecordSurface(on: model.isRecording))
         }
         .buttonStyle(PressableStyle())
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
-        .onChange(of: model.isRecording) { on in
-            guard !reduceMotion else { return }
-            if on {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulsing = true }
-            } else {
-                pulsing = false
-            }
+    }
+}
+
+private struct RecordSurface: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                    .fill(Theme.well))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                    .strokeBorder(Theme.outline, lineWidth: 1))
+        } else {
+            content.lifted(radius: Theme.radiusSmall, depth: 0.7)
         }
     }
 }
 
-/// Recorded steps use the same keycaps as the shortcut hints, so a mapping
-/// looks like the shortcut it will type.
-private struct SequenceStrip: View {
+/// The recorded shortcut, shown in the dark well the way a device shows what it
+/// is holding.
+private struct SequenceWell: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 if model.sequence.isEmpty {
-                    Text(model.isRecording ? "Press the keys now…" : "No shortcut set")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textFaint)
-                        .padding(.leading, 3)
+                    Text(model.isRecording ? "PRESS THE KEYS NOW…" : "NO SHORTCUT SET")
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(Theme.textOnWellMuted)
                 } else {
                     ForEach(model.sequence) { stroke in
-                        StrokeChip(stroke: stroke)
+                        WellCap(text: caps(for: stroke))
                     }
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .frame(minHeight: 52)
         }
         .frame(height: 52)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .recessed(radius: Theme.radius)
+        .well(radius: Theme.radiusSmall)
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .strokeBorder(model.isRecording ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .strokeBorder(model.isRecording ? Theme.lampAlert : .clear, lineWidth: 1.5)
         )
-        .activeGlow(Theme.accent, on: model.isRecording, radius: 8)
     }
-}
 
-private struct StrokeChip: View {
-    let stroke: KeyStroke
-
-    private var caps: [String] {
+    private func caps(for stroke: KeyStroke) -> [String] {
         var out: [String] = []
         let m = stroke.modifiers
         if m.contains(.leftCtrl) || m.contains(.rightCtrl) { out.append("⌃") }
@@ -212,19 +191,58 @@ private struct StrokeChip: View {
         if stroke.usage != 0 { out.append(HIDKeyboard.name(for: stroke.usage)) }
         return out
     }
+}
+
+/// A key drawn on the dark well — light on dark, unlike the caps on the panel.
+private struct WellCap: View {
+    let text: [String]
 
     var body: some View {
-        ShortcutHint(keys: caps, emphasized: true)
+        HStack(spacing: 3) {
+            ForEach(Array(text.enumerated()), id: \.offset) { _, key in
+                Text(key)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.textOnWell)
+                    .frame(minWidth: 20)
+                    .frame(height: 22)
+                    .padding(.horizontal, 5)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Theme.wellLift))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+            }
+        }
     }
 }
 
-/// Some keys cannot be recorded because a Mac keyboard has no way to send them.
-/// This is the way in for those, and it says so rather than calling itself
-/// "add a key by name".
-private struct ManualKeySection: View {
+private struct ManualKeyRow: View {
     @EnvironmentObject private var model: AppModel
-    @State private var usage: UInt8 = 0x68     // F13 — the common reason to be here
+    @State private var usage: UInt8 = 0x68
     @State private var mods: Modifier = .none
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ModifierRow(modifiers: $mods).fixedSize()
+                Picker("", selection: $usage) {
+                    ForEach(HIDKeyboard.selectable, id: \.self) { u in
+                        Text(HIDKeyboard.name(for: u)).tag(u)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+            }
+
+            HStack(spacing: 9) {
+                ShortcutHint(keys: preview)
+                Spacer()
+                PanelButton(title: "Add", compact: true) {
+                    model.addKey(usage: usage, modifiers: mods)
+                }
+            }
+        }
+    }
 
     private var preview: [String] {
         var out: [String] = []
@@ -235,45 +253,8 @@ private struct ManualKeySection: View {
         out.append(HIDKeyboard.name(for: usage))
         return out
     }
-
-    var body: some View {
-        SectionLabel(text: "Key your Mac can't type")
-
-        Text("F13–F24, Print Screen, Num Lock and the numeric keypad have no key on a Mac keyboard, so pick them here instead of recording.")
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textFaint)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 3)
-            .padding(.bottom, 9)
-
-        HStack(spacing: 8) {
-            ModifierRow(modifiers: $mods)
-                .fixedSize()
-            Picker("", selection: $usage) {
-                ForEach(HIDKeyboard.selectable, id: \.self) { u in
-                    Text(HIDKeyboard.name(for: u)).tag(u)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, 3)
-
-        HStack(spacing: 9) {
-            ShortcutHint(keys: preview, emphasized: true)
-            Spacer()
-            BarAction(title: "Add to shortcut", prominent: true) {
-                model.addKey(usage: usage, modifiers: mods)
-            }
-        }
-        .padding(.horizontal, 3)
-        .padding(.top, 9)
-    }
 }
 
-/// Modifiers as togglable keycaps rather than checkboxes — the control looks
-/// like the thing it produces.
 struct ModifierRow: View {
     @Binding var modifiers: Modifier
     var onChange: (() -> Void)?
@@ -291,14 +272,10 @@ struct ModifierRow: View {
                     onChange?()
                 } label: {
                     Text(symbol)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(on ? Theme.text : Theme.textFaint)
-                        .frame(width: 26, height: 24)
-                        .raised(radius: Theme.radiusSmall, depth: 0.45, pressed: on)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                                .strokeBorder(on ? Theme.accent.opacity(0.65) : .clear, lineWidth: 1.4)
-                        )
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(on ? Theme.textOnWell : Theme.textMuted)
+                        .frame(width: 27, height: 25)
+                        .modifier(RecordSurface(on: on))
                 }
                 .buttonStyle(PressableStyle())
             }
@@ -319,55 +296,23 @@ private struct MediaEditor: View {
     }
 
     var body: some View {
-        SectionLabel(text: "Media key")
-
-        VStack(spacing: 1) {
-            ForEach(available) { key in
-                Row(title: key.name,
-                    icon: icon(for: key),
-                    selected: model.mediaKey == key,
-                    action: {
-                        model.mediaKey = key
-                        model.commit()
-                    }) {
-                    if model.mediaKey == key {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+        Panel(title: "Media key") {
+            VStack(spacing: 1) {
+                ForEach(available) { key in
+                    Row(title: key.name,
+                        selected: model.mediaKey == key,
+                        action: { model.mediaKey = key; model.commit() }) {
+                        Lamp(on: model.mediaKey == key, size: 7)
                     }
                 }
             }
-        }
-
-        if available.count == MediaKey.legacySafe.count {
-            Text("Only these six have a known encoding for this firmware. Switch the media encoding to “HID consumer usage” in Settings for the full list.")
-                .font(Theme.caption)
-                .foregroundStyle(Theme.textFaint)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 9)
-                .padding(.top, 10)
-        }
-    }
-
-    private func icon(for key: MediaKey) -> String {
-        switch key.name {
-        case "Play / Pause": return "playpause"
-        case "Next track": return "forward.end"
-        case "Previous track": return "backward.end"
-        case "Mute": return "speaker.slash"
-        case "Volume up": return "speaker.wave.3"
-        case "Volume down": return "speaker.wave.1"
-        case "Stop": return "stop"
-        case "Fast forward": return "forward"
-        case "Rewind": return "backward"
-        case "Eject": return "eject"
-        case "Brightness up": return "sun.max"
-        case "Brightness down": return "sun.min"
-        case "Mail": return "envelope"
-        case "Calculator": return "function"
-        case "File explorer": return "folder"
-        case "Media player": return "music.note"
-        default: return "safari"
+            if available.count == MediaKey.legacySafe.count {
+                Text("Only these six have a known encoding for this firmware. Switch the media encoding in General for the full list.")
+                    .font(Theme.rowDetail)
+                    .foregroundStyle(Theme.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
+            }
         }
     }
 }
@@ -378,254 +323,19 @@ private struct MouseEditor: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        SectionLabel(text: "Mouse action")
-
-        VStack(spacing: 1) {
-            ForEach(MouseButton.allCases) { button in
-                Row(title: button.displayName,
-                    icon: icon(for: button),
-                    selected: model.mouseButton == button,
-                    action: {
-                        model.mouseButton = button
-                        model.commit()
-                    }) {
-                    if model.mouseButton == button {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+        Panel(title: "Mouse action") {
+            VStack(spacing: 1) {
+                ForEach(MouseButton.allCases) { button in
+                    Row(title: button.displayName,
+                        selected: model.mouseButton == button,
+                        action: { model.mouseButton = button; model.commit() }) {
+                        Lamp(on: model.mouseButton == button, size: 7)
                     }
                 }
             }
         }
-
-        SectionLabel(text: "Held modifiers")
-        ModifierRow(modifiers: $model.mouseModifiers) { model.commit() }
-            .padding(.horizontal, 9)
-    }
-
-    private func icon(for button: MouseButton) -> String {
-        switch button {
-        case .left: return "cursorarrow.click"
-        case .middle: return "cursorarrow.click.2"
-        case .right: return "cursorarrow.and.square.on.square.dashed"
-        case .scrollUp: return "arrow.up"
-        case .scrollDown: return "arrow.down"
+        Panel(title: "Held modifiers") {
+            ModifierRow(modifiers: $model.mouseModifiers) { model.commit() }
         }
-    }
-}
-
-// MARK: - LED
-
-private struct LedEditor: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        if model.activeProtocol == .webHub {
-            WebHubBacklightEditor()
-        } else {
-            LegacyLedEditor()
-        }
-    }
-}
-
-/// The backlight as this firmware actually models it: one effect plus the
-/// handful of parameters that effect uses. Controls that the current effect
-/// ignores are hidden rather than shown doing nothing.
-private struct WebHubBacklightEditor: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        SectionLabel(text: "Effect")
-
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
-                  spacing: 8) {
-            ForEach(Array(BacklightState.modeNames.enumerated()), id: \.offset) { index, name in
-                EffectTile(title: name,
-                           mode: index,
-                           selected: model.backlight.mode == UInt8(index),
-                           colour: model.backlight.color == 1
-                               ? Color(hue: Double(model.backlight.hue) / 255, saturation: 0.85, brightness: 1)
-                               : nil) {
-                    model.backlight.mode = UInt8(index)
-                    model.applyBacklight()
-                }
-            }
-        }
-        .padding(.horizontal, 3)
-
-        if !model.backlight.isOff {
-            if model.backlight.usesSpeed {
-                let steps = model.backlight.speedSteps
-                LabeledSlider(title: "Speed",
-                              readout: "\(model.backlight.speed)",
-                              value: Binding(
-                                get: { Double(min(max(model.backlight.speed, steps.lowerBound), steps.upperBound)) },
-                                set: { model.backlight.speed = UInt8($0.rounded()) }
-                              ),
-                              range: Double(steps.lowerBound)...Double(steps.upperBound),
-                              ticks: Int(steps.upperBound - steps.lowerBound) + 1) {
-                    model.applyBacklight()
-                }
-                if let note = model.backlight.speedNote {
-                    Text(note)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textFaint)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 3)
-                        .padding(.top, 6)
-                }
-            }
-
-            if model.backlight.usesColor {
-                SectionLabel(text: "Colour")
-                Segmented(selection: Binding(
-                    get: { model.backlight.color },
-                    set: { model.backlight.color = $0; model.applyBacklight() }
-                ), items: [(UInt8(0), "Rainbow", "circle.hexagongrid.fill"),
-                           (UInt8(1), "One colour", "paintpalette.fill")])
-                .padding(.horizontal, 3)
-
-                if model.backlight.color == 1 {
-                    HueBand(hue: Binding(
-                        get: { Double(model.backlight.hue) },
-                        set: { model.backlight.hue = UInt8($0) }
-                    ), onCommit: { model.applyBacklight() })
-                    .padding(.top, 12)
-                    .padding(.horizontal, 3)
-                }
-            }
-        }
-
-        Text(model.backlightIsLive
-             ? "These are the keypad's current settings, read from the hardware. Changes are written straight away."
-             : "Connect the keypad to read its current backlight.")
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textFaint)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 3)
-            .padding(.top, 14)
-    }
-}
-
-/// A section header with its current value on the right, over a slider — so the
-/// number is there when you want it and out of the way when you don't.
-private struct LabeledSlider: View {
-    let title: String
-    let readout: String
-    @Binding var value: Double
-    var range: ClosedRange<Double>
-    var ticks: Int
-    let onCommit: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(Theme.sectionLabel)
-                    .tracking(0.3)
-                    .foregroundStyle(Theme.textFaint)
-                Spacer()
-                Text(readout)
-                    .font(Theme.mono)
-                    .foregroundStyle(Theme.textMuted)
-            }
-            .padding(.horizontal, 3)
-
-            GlassSlider(value: $value, range: range, ticks: ticks, onCommit: onCommit)
-                .padding(.horizontal, 3)
-        }
-        .padding(.top, 12)
-    }
-}
-
-private struct LegacyLedEditor: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        SectionLabel(text: "Backlight mode")
-
-        VStack(spacing: 1) {
-            ForEach(Array(LedMode.allCases.prefix(max(model.layout.ledModeCount, 1))), id: \.self) { mode in
-                Row(title: mode.displayName,
-                    icon: mode == .mode0 ? "lightbulb.slash" : "lightbulb",
-                    selected: model.profile.ledMode == mode,
-                    action: { model.profile.ledMode = mode }) {
-                    if model.profile.ledMode == mode {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
-            }
-        }
-
-        if model.layout.supportsColor {
-            SectionLabel(text: "Colour")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 4), spacing: 7) {
-                ForEach(LedColor.allCases) { color in
-                    ColorSwatch(color: color, selected: model.profile.ledColor == color) {
-                        model.profile.ledColor = color
-                    }
-                }
-            }
-            .padding(.horizontal, 9)
-            .padding(.top, 2)
-        }
-
-        Text("Backlight applies to the whole pad, not to one key. Press Save to send it.")
-            .font(Theme.caption)
-            .foregroundStyle(Theme.textFaint)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 9)
-            .padding(.top, 12)
-    }
-}
-
-private struct ColorSwatch: View {
-    let color: LedColor
-    let selected: Bool
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    private var swatch: some ShapeStyle {
-        switch color {
-        case .random:
-            return AnyShapeStyle(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
-                                                 center: .center))
-        case .red:    return AnyShapeStyle(Color(red: 1.00, green: 0.27, blue: 0.27))
-        case .orange: return AnyShapeStyle(Color(red: 1.00, green: 0.58, blue: 0.20))
-        case .yellow: return AnyShapeStyle(Color(red: 1.00, green: 0.84, blue: 0.25))
-        case .green:  return AnyShapeStyle(Color(red: 0.30, green: 0.85, blue: 0.39))
-        case .cyan:   return AnyShapeStyle(Color(red: 0.28, green: 0.83, blue: 0.89))
-        case .blue:   return AnyShapeStyle(Color(red: 0.28, green: 0.55, blue: 1.00))
-        case .purple: return AnyShapeStyle(Color(red: 0.70, green: 0.42, blue: 1.00))
-        }
-    }
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .fill(swatch)
-                    .frame(height: 22)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                            .strokeBorder(Color.white.opacity(selected ? 0.9 : 0.12),
-                                          lineWidth: selected ? 1.5 : 1)
-                    )
-                Text(color.displayName)
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(selected ? Theme.text : Theme.textFaint)
-                    .lineLimit(1)
-            }
-            .padding(4)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(hovering ? Theme.rowHover : .clear)
-            )
-        }
-        .buttonStyle(PressableStyle())
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
     }
 }

@@ -7,8 +7,7 @@ struct MacroPadApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarPanel()
-                .environmentObject(model)
+            MenuBarPanel().environmentObject(model)
         } label: {
             Image(systemName: "keyboard.fill")
         }
@@ -17,41 +16,34 @@ struct MacroPadApp: App {
         Window("MacroPad", id: "main") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 940, minHeight: 620)
-                .background(WindowBackground())
-                .preferredColorScheme(.dark)
+                .frame(minWidth: 1000, minHeight: 660)
                 .onAppear { model.applyActivationPolicy() }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
-            CommandMenu("Device") {
-                Button("Connect") { model.connect() }
-                    .keyboardShortcut("k", modifiers: [.command])
-                Button("Disconnect") { model.disconnect() }
-                    .disabled(!model.isConnected)
-                Divider()
-                Button("Refresh device list") { model.refreshDevices() }
-                    .keyboardShortcut("r", modifiers: [.command])
-                Button("Probe report ids") { model.probeReportIds() }
-                Divider()
+            // Settings live in the window's own sidebar, so the app menu points
+            // there rather than opening a second window behind ⌘,.
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings are in the window sidebar") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
+            CommandMenu("Keypad") {
                 Button("Save to keypad") { model.saveToKeyboard() }
                     .keyboardShortcut("s", modifiers: [.command])
                 Button("Save this key only") { model.saveSelectedKey() }
                     .keyboardShortcut("s", modifiers: [.command, .option])
                 Divider()
-                Button("Import preset…") { model.importPreset() }
-                Button("Export preset…") { model.exportPreset() }
-
+                Button("Connect") { model.connect() }
+                Button("Disconnect") { model.disconnect() }
+                    .disabled(!model.isConnected)
+                Button("Refresh devices") { model.refreshDevices() }
+                    .keyboardShortcut("r", modifiers: [.command])
             }
-        }
-
-        Settings {
-            SettingsView()
-                .environmentObject(model)
-                .background(WindowBackground())
-                .preferredColorScheme(.dark)
         }
     }
 }

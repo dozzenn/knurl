@@ -1,73 +1,50 @@
 import SwiftUI
 import MacroPadCore
 
-/// What the menu bar icon drops down. Deliberately small: the keypad's state,
-/// one-click profile switching, and the way into everything else. Anything that
-/// needs more room lives in the window.
+/// A small version of the panel for the menu bar: what the keypad is holding,
+/// and the sets you can put on it. Everything else lives in the window.
 struct MenuBarPanel: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            HStack(spacing: 9) {
+                Lamp(on: model.isConnected, colour: Theme.lampGood, size: 9)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.deviceLabel)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Theme.text)
+                    PanelLabel(text: model.isConnected ? model.deviceDetail : "not connected",
+                               colour: Theme.textFaint, size: 9)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
 
-            Divider().background(Theme.hairline).padding(.vertical, 6)
             SectionLabel(text: "Key sets")
-
             ForEach(model.scopes) { scope in
                 Row(title: scope.name,
                     subtitle: scope.isGlobal ? "everywhere" : "only in this app",
                     icon: scope.isGlobal ? "globe" : "app",
                     selected: scope.key == model.liveScopeKey,
                     action: { model.load(scope) }) {
-                    if scope.key == model.liveScopeKey {
-                        Circle().fill(Theme.online).frame(width: 6, height: 6)
-                    }
+                    Lamp(on: scope.key == model.liveScopeKey, colour: Theme.lampGood, size: 6)
                 }
             }
 
-            Divider().background(Theme.hairline).padding(.vertical, 6)
+            Hairline().padding(.vertical, 6)
 
-            Row(title: "Save to keypad", icon: "arrow.down.circle") {
-                model.saveToKeyboard()
-            } trailing: {
-                ShortcutHint(keys: ["⌘", "S"])
-            }
+            Row(title: "Save to keypad", icon: "arrow.down.circle") { model.saveToKeyboard() }
             Row(title: "Open MacroPad", icon: "macwindow") {
                 NSApp.activate(ignoringOtherApps: true)
                 NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
             }
-
-            Divider().background(Theme.hairline).padding(.vertical, 6)
-
-            Row(title: "Quit MacroPad", icon: "power") {
-                NSApp.terminate(nil)
-            } trailing: {
-                ShortcutHint(keys: ["⌘", "Q"])
-            }
+            Row(title: "Quit", icon: "power") { NSApp.terminate(nil) }
         }
         .padding(.vertical, 8)
         .frame(width: 300)
-        // MenuBarExtra hands its content a light system material, so the panel
-        // has to paint its own ground or the light-on-dark palette inverts.
         .background(PopoverBackground())
-        .preferredColorScheme(.dark)
-    }
-
-    private var header: some View {
-        HStack(spacing: 9) {
-            StatusDot(color: model.isConnected ? Theme.online : Theme.textFaint)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.deviceLabel)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                Text(model.isConnected ? model.deviceDetail : "Not connected")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.textFaint)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
     }
 }

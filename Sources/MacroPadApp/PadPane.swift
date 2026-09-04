@@ -1,22 +1,22 @@
 import SwiftUI
 import MacroPadCore
 
-/// The pad itself, drawn where the keys physically sit. Selecting a control is
-/// the most repeated action in the app, so selection is a background change
-/// only — nothing scales, nothing slides.
+/// The keypad itself, drawn where the keys physically sit — a plate with keys
+/// standing proud of it. Selecting a key is the most repeated action here, so
+/// selection is a lamp and an outline, not motion.
 struct PadPane: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             header
             Hairline()
 
             GeometryReader { geo in
                 let content = model.layout.contentSize
-                let scale = min((geo.size.width - 40) / content.width,
-                                (geo.size.height - 40) / content.height,
-                                6.5)
+                let scale = min((geo.size.width - 56) / content.width,
+                                (geo.size.height - 56) / content.height,
+                                7.0)
                 ZStack(alignment: .topLeading) {
                     ForEach(model.layout.controls) { control in
                         ControlView(control: control, scale: scale)
@@ -25,9 +25,11 @@ struct PadPane: View {
                     }
                 }
                 .frame(width: content.width * scale, height: content.height * scale)
+                .padding(22)
+                .trough(radius: Theme.radiusPanel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(20)
+            .padding(Theme.gutter)
 
             Hairline()
             footer
@@ -38,22 +40,13 @@ struct PadPane: View {
         HStack(spacing: 8) {
             Menu {
                 ForEach(LayoutLibrary.all) { layout in
-                    Button {
-                        model.layout = layout
-                    } label: {
-                        Text(layout.name == model.layout.name ? "✓ \(layout.name)" : layout.name)
-                    }
+                    Button(layout.name) { model.layout = layout }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.textMuted)
-                    Text(model.layout.name)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Theme.text)
+                HStack(spacing: 7) {
+                    PanelLabel(text: model.layout.name, colour: Theme.text)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 7, weight: .bold))
                         .foregroundStyle(Theme.textFaint)
                 }
             }
@@ -62,37 +55,21 @@ struct PadPane: View {
             .fixedSize()
 
             Spacer()
-
-            Text("\(configuredCount) mapped")
-                .font(Theme.caption)
-                .foregroundStyle(Theme.textFaint)
+            PanelLabel(text: "\(configuredCount) mapped", colour: Theme.textFaint, size: 9)
         }
         .padding(.horizontal, Theme.gutter)
         .frame(height: 34)
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
-            Text(model.selectedAction.displayName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.text)
+        HStack(spacing: 9) {
+            PanelLabel(text: model.selectedAction.displayName, colour: Theme.text)
             let summary = model.binding(for: model.selectedAction).summary
-            if summary.isEmpty {
-                Text("not mapped")
-                    .font(Theme.caption)
-                    .foregroundStyle(Theme.textFaint)
-            } else {
-                Text(summary)
-                    .font(Theme.caption)
-                    .foregroundStyle(Theme.textMuted)
-                    .lineLimit(1)
-            }
+            Text(summary.isEmpty ? "not mapped" : summary)
+                .font(Theme.rowDetail)
+                .foregroundStyle(summary.isEmpty ? Theme.textFaint : Theme.textMuted)
+                .lineLimit(1)
             Spacer()
-            if model.layout.layerCount > 1 {
-                Text("Layer \(model.layer + 1)")
-                    .font(Theme.caption)
-                    .foregroundStyle(Theme.textFaint)
-            }
         }
         .padding(.horizontal, Theme.gutter)
         .frame(height: 34)
@@ -112,13 +89,13 @@ private struct ControlView: View {
         switch control.kind {
         case .button(let index):
             let action = InputAction.key(index)
-            ButtonFace(title: "\(index)",
-                       subtitle: model.binding(for: action).summary,
-                       selected: model.selectedAction == action,
-                       mapped: model.binding(for: action).isSet,
-                       presses: model.statsEnabled ? model.presses(for: action) : nil,
-                       size: CGSize(width: control.position.width * scale,
-                                    height: control.position.height * scale))
+            KeyFace(title: "\(index)",
+                    subtitle: model.binding(for: action).summary,
+                    selected: model.selectedAction == action,
+                    mapped: model.binding(for: action).isSet,
+                    presses: model.statsEnabled ? model.presses(for: action) : nil,
+                    size: CGSize(width: control.position.width * scale,
+                                 height: control.position.height * scale))
                 .onTapGesture { model.selectedAction = action }
         case .knob(let index):
             KnobFace(index: index,
@@ -128,30 +105,24 @@ private struct ControlView: View {
     }
 }
 
-/// A keycap: a raised dark surface with a bright top edge, the way light
-/// catches a real key. Mapped keys carry an accent underline rather than a
-/// filled background, so a full pad still reads as a pad and not as a chart.
-private struct ButtonFace: View {
+private struct KeyFace: View {
     let title: String
     let subtitle: String
     let selected: Bool
     let mapped: Bool
-    /// Presses on this key, when counting is on.
     var presses: Int?
     let size: CGSize
 
-    @State private var hovering = false
-
     var body: some View {
-        let radius = min(size.width, size.height) * 0.16
+        let radius = min(size.width, size.height) * 0.17
 
-        VStack(spacing: 2) {
+        VStack(spacing: 3) {
             Text(title)
-                .font(.system(size: max(11, size.height * 0.22), weight: .semibold, design: .rounded))
-                .foregroundStyle(mapped ? Theme.text : Theme.textMuted)
+                .font(.system(size: max(13, size.height * 0.24), weight: .medium, design: .monospaced))
+                .foregroundStyle(Theme.text)
             if !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: max(8, size.height * 0.125), weight: .medium))
+                    .font(.system(size: max(8, size.height * 0.12), weight: .medium, design: .monospaced))
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -159,36 +130,25 @@ private struct ButtonFace: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .raised(radius: radius, depth: hovering ? 1.15 : 0.95, pressed: false)
-        .overlay(alignment: .bottom) {
-            if mapped {
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(Theme.accent.opacity(selected ? 1 : 0.55))
-                    .frame(width: size.width * 0.42, height: 2)
-                    .padding(.bottom, max(4, size.height * 0.07))
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1.6)
-        )
-        .activeGlow(Theme.accent, on: selected, radius: 9)
+        .lifted(radius: radius, pressed: selected, depth: 1.1)
         .overlay(alignment: .topTrailing) {
             if let presses, presses > 0 {
                 DotMatrixNumber(text: "\(presses)",
-                                dot: max(1.2, size.height * 0.022),
-                                gap: max(0.7, size.height * 0.012),
+                                dot: max(1.2, size.height * 0.02),
+                                gap: max(0.7, size.height * 0.011),
                                 color: Theme.textFaint)
-                    .padding(max(4, size.height * 0.07))
+                    .padding(max(4, size.height * 0.06))
             }
         }
+        .overlay(alignment: .bottom) {
+            Lamp(on: mapped, colour: selected ? Theme.lampOn : Theme.lampGood,
+                 size: max(5, size.height * 0.08))
+                .padding(.bottom, max(4, size.height * 0.06))
+        }
         .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
     }
 }
 
-/// Knobs expose three targets — turn left, press, turn right — arranged the way
-/// the hand moves, so the control maps to what it changes.
 private struct KnobFace: View {
     @EnvironmentObject private var model: AppModel
     let index: Int
@@ -198,24 +158,17 @@ private struct KnobFace: View {
         let d = min(size.width, size.height)
         ZStack {
             Circle()
-                .fill(Theme.groundLift)
-                .overlay(
-                    Circle().strokeBorder(
-                        LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.02)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1)
-                )
-                .shadow(color: Theme.lightEdge, radius: 6, x: -3, y: -3)
-                .shadow(color: Theme.darkEdge, radius: 10, x: 5, y: 5)
+                .fill(LinearGradient(colors: [Color.white.opacity(0.95), Theme.panel],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(Circle().strokeBorder(Theme.outline, lineWidth: 1))
+                .shadow(color: Theme.dropShadow, radius: 5, x: 2, y: 3)
 
             ForEach(KnobPart.allCases, id: \.self) { part in
                 KnobSegment(index: index, part: part, diameter: d)
                     .offset(x: offset(for: part) * d)
             }
 
-            Text("K\(index)")
-                .font(.system(size: max(7.5, d * 0.12), weight: .medium))
-                .foregroundStyle(Theme.textFaint)
+            PanelLabel(text: "K\(index)", colour: Theme.textFaint, size: max(7, d * 0.1))
                 .offset(y: d * 0.33)
         }
         .frame(width: size.width, height: size.height)
@@ -236,26 +189,21 @@ private struct KnobSegment: View {
     let part: KnobPart
     let diameter: CGFloat
 
-    @State private var hovering = false
-
     var body: some View {
         let action = InputAction.knob(index, part)
         let selected = model.selectedAction == action
         let mapped = model.binding(for: action).isSet
 
         Text(part.symbol)
-            .font(.system(size: max(9, diameter * 0.2), weight: .semibold))
-            .foregroundStyle(mapped ? Theme.text : Theme.textFaint)
-            .frame(width: diameter * 0.32, height: diameter * 0.32)
+            .font(.system(size: max(9, diameter * 0.19), weight: .semibold))
+            .foregroundStyle(selected ? Theme.textOnWell : (mapped ? Theme.text : Theme.textFaint))
+            .frame(width: diameter * 0.3, height: diameter * 0.3)
             .background(
-                Circle().fill(selected ? Theme.accent.opacity(0.32)
-                              : (hovering ? Theme.rowHover : (mapped ? Theme.fillStrong : .clear)))
+                Circle().fill(selected ? Theme.well : Color.white.opacity(mapped ? 0.65 : 0.2))
             )
-            .overlay(Circle().strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1.5))
-            .activeGlow(Theme.accent, on: selected, radius: 6)
+            .overlay(Circle().strokeBorder(Theme.outline.opacity(selected ? 1 : 0.4), lineWidth: 1))
             .contentShape(Circle())
             .onTapGesture { model.selectedAction = action }
-            .onHover { h in withAnimation(Theme.hover) { hovering = h } }
             .help("Knob \(index) \(part.symbol)")
     }
 }

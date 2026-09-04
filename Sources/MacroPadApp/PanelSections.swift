@@ -576,6 +576,15 @@ struct GeneralSection: View {
                               isOn: $model.hideDockIcon)
                 }
 
+                Panel(title: "Appearance") {
+                    SegmentedSwitch(selection: $model.appearance,
+                                    items: AppModel.Appearance.allCases.map { ($0, $0.title) })
+                    Text("Light is the panel in pale plastic, dark is the same instrument in a dark case.")
+                        .font(Theme.rowDetail)
+                        .foregroundStyle(Theme.textFaint)
+                        .padding(.top, 8)
+                }
+
                 Panel(title: "Presets") {
                     HStack(spacing: 9) {
                         PanelButton(title: "Import preset") { model.importPreset() }

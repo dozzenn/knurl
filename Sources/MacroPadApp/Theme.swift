@@ -7,39 +7,69 @@ import SwiftUI
 // indicator lamps that light up. Type is monospaced and set in small caps with
 // open tracking, the way a device is labelled.
 
+/// A colour that follows the window's appearance.
+///
+/// The panel exists in two materials — a pale one and a dark one — and every
+/// part is described once, in both, so a switch flips the whole instrument
+/// rather than a list of special cases.
+func dynamic(light: (Double, Double, Double, Double),
+             dark: (Double, Double, Double, Double)) -> Color {
+    Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let c = isDark ? dark : light
+        return NSColor(srgbRed: c.0, green: c.1, blue: c.2, alpha: c.3)
+    })
+}
+
 enum Theme {
 
     // MARK: Ground
 
-    static let ground      = Color(red: 0.765, green: 0.765, blue: 0.769)
-    static let panel       = Color(red: 0.827, green: 0.827, blue: 0.831)
-    static let panelLift   = Color(red: 0.878, green: 0.878, blue: 0.882)
-    /// Wells: inputs, readouts, anything that holds rather than does.
-    static let well        = Color(red: 0.055, green: 0.055, blue: 0.059)
-    static let wellLift    = Color(red: 0.114, green: 0.114, blue: 0.118)
+    static let ground     = dynamic(light: (0.765, 0.765, 0.769, 1), dark: (0.137, 0.141, 0.153, 1))
+    static let panel      = dynamic(light: (0.827, 0.827, 0.831, 1), dark: (0.173, 0.177, 0.192, 1))
+    static let panelLift  = dynamic(light: (0.878, 0.878, 0.882, 1), dark: (0.212, 0.216, 0.235, 1))
+    static let well       = dynamic(light: (0.055, 0.055, 0.059, 1), dark: (0.043, 0.043, 0.051, 1))
+    static let wellLift   = dynamic(light: (0.114, 0.114, 0.118, 1), dark: (0.098, 0.098, 0.110, 1))
 
-    /// The hairline that gives every part an edge.
-    static let outline     = Color.black.opacity(0.82)
-    static let outlineSoft = Color.black.opacity(0.28)
-    static let highlight   = Color.white.opacity(0.92)
-    static let dropShadow  = Color.black.opacity(0.28)
+    static let outline    = dynamic(light: (0, 0, 0, 0.82), dark: (0, 0, 0, 0.78))
+    static let outlineSoft = dynamic(light: (0, 0, 0, 0.28), dark: (1, 1, 1, 0.14))
+    static let highlight  = dynamic(light: (1, 1, 1, 0.92), dark: (1, 1, 1, 0.13))
+    static let dropShadow = dynamic(light: (0, 0, 0, 0.28), dark: (0, 0, 0, 0.55))
 
     // MARK: Ink
 
-    static let text        = Color(red: 0.09, green: 0.09, blue: 0.10)
-    static let textMuted   = Color(red: 0.09, green: 0.09, blue: 0.10).opacity(0.62)
-    static let textFaint   = Color(red: 0.09, green: 0.09, blue: 0.10).opacity(0.38)
-    /// Ink on a dark well.
-    static let textOnWell  = Color.white.opacity(0.92)
+    static let text       = dynamic(light: (0.09, 0.09, 0.10, 1), dark: (1, 1, 1, 0.92))
+    static let textMuted  = dynamic(light: (0.09, 0.09, 0.10, 0.62), dark: (1, 1, 1, 0.58))
+    static let textFaint  = dynamic(light: (0.09, 0.09, 0.10, 0.38), dark: (1, 1, 1, 0.36))
+    static let textOnWell = Color.white.opacity(0.92)
     static let textOnWellMuted = Color.white.opacity(0.55)
+
+    // MARK: Key caps and knobs
+
+    static let capBodyHigh = dynamic(light: (0.878, 0.878, 0.882, 1), dark: (0.235, 0.239, 0.259, 1))
+    static let capBodyLow  = dynamic(light: (0.66, 0.66, 0.665, 1), dark: (0.129, 0.133, 0.145, 1))
+    static let capFaceHigh = dynamic(light: (1, 1, 1, 1), dark: (0.290, 0.298, 0.322, 1))
+    static let capFaceLow  = dynamic(light: (0.855, 0.855, 0.859, 1), dark: (0.216, 0.220, 0.239, 1))
+    static let capIdleHigh = dynamic(light: (0.93, 0.93, 0.935, 1), dark: (0.243, 0.247, 0.267, 1))
+    static let capIdleLow  = dynamic(light: (0.82, 0.82, 0.825, 1), dark: (0.184, 0.188, 0.204, 1))
+    static let capSunkHigh = dynamic(light: (0.80, 0.80, 0.805, 1), dark: (0.165, 0.169, 0.184, 1))
+    static let capSunkLow  = dynamic(light: (0.88, 0.88, 0.885, 1), dark: (0.212, 0.216, 0.231, 1))
+
+    static let bezelHigh   = dynamic(light: (0.55, 0.55, 0.555, 1), dark: (0.278, 0.282, 0.302, 1))
+    static let bezelLow    = dynamic(light: (0.30, 0.30, 0.305, 1), dark: (0.098, 0.102, 0.114, 1))
+    /// Stops for the turned face of a knob, light to dark and back.
+    static func turnedMetal(_ level: Double) -> Color {
+        dynamic(light: (level, level, level + 0.004, 1),
+                dark: (level * 0.36 + 0.06, level * 0.36 + 0.065, level * 0.38 + 0.075, 1))
+    }
 
     // MARK: Lamps
 
-    static let lampOn      = Color(red: 0.953, green: 0.792, blue: 0.008)
-    static let lampOff     = Color(red: 0.42, green: 0.42, blue: 0.43)
-    static let lampGood    = Color(red: 0.20, green: 0.78, blue: 0.38)
-    static let lampAlert   = Color(red: 0.90, green: 0.25, blue: 0.22)
-    static let accent      = Color(red: 0.36, green: 0.20, blue: 0.92)
+    static let lampOn    = Color(red: 0.953, green: 0.792, blue: 0.008)
+    static let lampOff   = dynamic(light: (0.42, 0.42, 0.43, 1), dark: (0.38, 0.38, 0.40, 1))
+    static let lampGood  = Color(red: 0.20, green: 0.78, blue: 0.38)
+    static let lampAlert = Color(red: 0.90, green: 0.25, blue: 0.22)
+    static let accent    = Color(red: 0.36, green: 0.20, blue: 0.92)
 
     // MARK: Metrics
 
@@ -52,11 +82,6 @@ enum Theme {
     static let trafficLightInset: CGFloat = 78
 
     // MARK: Type
-    //
-    // Monospace throughout, because a control panel is labelled, not written.
-    // macOS has no pixel face to ship, so the retro register comes from the
-    // dot-matrix renderer below for readouts and wordmarks, and from small caps
-    // with open tracking everywhere else.
 
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
@@ -75,8 +100,8 @@ enum Theme {
 }
 
 extension Color {
-    /// `"E8483F"` → a colour. Used for the identity colours carried by presets,
-    /// which are stored as strings so the model needs no UI framework.
+    /// `"E8483F"` → a colour. Preset identity colours are stored as strings so
+    /// the model needs no UI framework.
     init(hex: String) {
         var value: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&value)
@@ -354,7 +379,7 @@ struct PanelSwitch: View {
                     .fill(isOn
                           ? LinearGradient(colors: [Theme.wellLift, Theme.well],
                                            startPoint: .topLeading, endPoint: .bottomTrailing)
-                          : LinearGradient(colors: [Color.white, Theme.panel],
+                          : LinearGradient(colors: [Theme.capFaceHigh, Theme.capFaceLow],
                                            startPoint: .topLeading, endPoint: .bottomTrailing))
                     .overlay(Circle().strokeBorder(Theme.outline, lineWidth: 1))
                     .shadow(color: Theme.dropShadow, radius: 3, x: 1, y: 1.5)
@@ -412,7 +437,7 @@ struct PanelSlider: View {
                 }
 
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(LinearGradient(colors: [Color.white, Theme.panel],
+                    .fill(LinearGradient(colors: [Theme.capFaceHigh, Theme.capFaceLow],
                                          startPoint: .top, endPoint: .bottom))
                     .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .strokeBorder(Theme.outline, lineWidth: 1))

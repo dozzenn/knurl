@@ -118,6 +118,12 @@ private struct KeyFace: View {
 
     @State private var hovering = false
 
+    private var faceColours: [Color] {
+        if selected { return [Theme.capSunkHigh, Theme.capSunkLow] }
+        return mapped ? [Theme.capFaceHigh, Theme.capFaceLow]
+                      : [Theme.capIdleHigh, Theme.capIdleLow]
+    }
+
     var body: some View {
         let radius = min(size.width, size.height) * 0.19
         let inset = max(3, min(size.width, size.height) * 0.055)
@@ -126,7 +132,7 @@ private struct KeyFace: View {
         ZStack {
             // Body — the walls of the cap.
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.panelLift, Color(white: 0.66)],
+                .fill(LinearGradient(colors: [Theme.capBodyHigh, Theme.capBodyLow],
                                      startPoint: .top, endPoint: .bottom))
                 .overlay(
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -137,11 +143,7 @@ private struct KeyFace: View {
 
             // Top face — sunk when the key is the one being edited.
             RoundedRectangle(cornerRadius: radius * 0.78, style: .continuous)
-                .fill(LinearGradient(
-                    colors: selected
-                    ? [Color(white: 0.80), Color(white: 0.88)]
-                    : [Color.white, Color(white: 0.855)],
-                    startPoint: .top, endPoint: .bottom))
+                .fill(LinearGradient(colors: faceColours, startPoint: .top, endPoint: .bottom))
                 .overlay(
                     RoundedRectangle(cornerRadius: radius * 0.78, style: .continuous)
                         .strokeBorder(Color.black.opacity(selected ? 0.30 : 0.16), lineWidth: 1)
@@ -167,15 +169,9 @@ private struct KeyFace: View {
                 }
             }
             .padding(.horizontal, pad)
-            .padding(.bottom, inset * 1.6)
+            .padding(.top, inset * 0.4)
+            .padding(.bottom, inset * 1.1)
 
-            // Lamp in the skirt, below the face.
-            VStack {
-                Spacer()
-                Lamp(on: mapped, colour: selected ? Theme.lampOn : Theme.lampGood,
-                     size: max(4.5, size.height * 0.062))
-                    .padding(.bottom, inset * 0.35)
-            }
         }
         .frame(width: size.width, height: size.height)
         .overlay(alignment: .topTrailing) {
@@ -205,7 +201,7 @@ private struct KnobFace: View {
 
     var body: some View {
         let d = min(size.width, size.height)
-        let bodyD = d * 0.62
+        let bodyD = d * 0.54
 
         ZStack {
             TickRing(diameter: d, count: 15)
@@ -215,7 +211,7 @@ private struct KnobFace: View {
 
             // Bezel
             Circle()
-                .fill(LinearGradient(colors: [Color(white: 0.55), Color(white: 0.30)],
+                .fill(LinearGradient(colors: [Theme.bezelHigh, Theme.bezelLow],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: bodyD + d * 0.055, height: bodyD + d * 0.055)
                 .shadow(color: Theme.dropShadow, radius: 5, x: 1, y: 3)
@@ -223,13 +219,13 @@ private struct KnobFace: View {
             // Turned metal face
             Circle()
                 .fill(AngularGradient(colors: [
-                    Color(white: 0.97), Color(white: 0.80), Color(white: 0.94),
-                    Color(white: 0.76), Color(white: 0.97), Color(white: 0.82),
-                    Color(white: 0.93), Color(white: 0.78), Color(white: 0.97),
+                    Theme.turnedMetal(0.97), Theme.turnedMetal(0.80), Theme.turnedMetal(0.94),
+                    Theme.turnedMetal(0.76), Theme.turnedMetal(0.97), Theme.turnedMetal(0.82),
+                    Theme.turnedMetal(0.93), Theme.turnedMetal(0.78), Theme.turnedMetal(0.97),
                 ], center: .center))
                 .overlay(
                     Circle().fill(
-                        LinearGradient(colors: [Color.white.opacity(0.75), Color.clear],
+                        LinearGradient(colors: [Theme.highlight.opacity(0.8), Color.clear],
                                        startPoint: .topLeading, endPoint: .center))
                 )
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.30), lineWidth: 1))
@@ -273,7 +269,7 @@ private struct TickRing: View {
                     .fill(Theme.textFaint)
                     .frame(width: max(1, diameter * 0.012),
                            height: diameter * (i == 0 || i == count - 1 || i == count / 2 ? 0.07 : 0.045))
-                    .offset(y: -diameter * 0.44)
+                    .offset(y: -diameter * 0.38)
                     .rotationEffect(.degrees(angle))
             }
         }
@@ -294,28 +290,39 @@ private struct KnobWing: View {
         let action = InputAction.knob(index, part)
         let selected = model.selectedAction == action
         let mapped = model.binding(for: action).isSet
-        let x = (part == .left ? -1.0 : 1.0) * diameter * 0.395
+        let x = (part == .left ? -1.0 : 1.0) * diameter * 0.46
 
-        VStack(spacing: 2) {
+        VStack(spacing: diameter * 0.02) {
             Text(part.symbol)
-                .font(.system(size: diameter * 0.12, weight: .semibold))
+                .font(.system(size: diameter * 0.17, weight: .semibold))
                 .foregroundStyle(selected ? Theme.textOnWell : (mapped ? Theme.text : Theme.textFaint))
             Lamp(on: mapped, colour: selected ? Theme.lampOn : Theme.lampGood,
-                 size: diameter * 0.045)
+                 size: diameter * 0.055)
         }
-        .frame(width: diameter * 0.19, height: diameter * 0.26)
-        .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(selected ? Theme.well : Color.white.opacity(hovering ? 0.7 : 0.35))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .strokeBorder(Theme.outline.opacity(selected ? 1 : 0.35), lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .frame(width: diameter * 0.28, height: diameter * 0.4)
+        .modifier(WingSurface(selected: selected, hovering: hovering,
+                              radius: diameter * 0.07))
+        .contentShape(RoundedRectangle(cornerRadius: diameter * 0.07, style: .continuous))
         .onTapGesture { model.selectedAction = action }
         .offset(x: x)
         .onHover { h in withAnimation(Theme.hover) { hovering = h } }
         .help("Knob \(index) \(part.symbol)")
+    }
+}
+
+private struct WingSurface: ViewModifier {
+    let selected: Bool
+    let hovering: Bool
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        if selected {
+            content
+                .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Theme.well))
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Theme.outline, lineWidth: 1))
+        } else {
+            content.lifted(radius: radius, depth: hovering ? 0.9 : 0.6)
+        }
     }
 }

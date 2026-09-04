@@ -138,7 +138,7 @@ public enum LayoutLibrary {
             name: "3 keys, 1 knob (SIDE-KEYBOARD)",
             products: [(0x6D7B, 0xDCFA)],
             layerCount: 1, maxCharacters: 1, supportsDelay: false, supportsColor: false, ledModeCount: 6,
-            controls: buttons([(1, 5, 20), (2, 27, 20), (3, 49, 20)]) + [knob(1, 78, 15, 26, 26)]
+            controls: buttons([(1, 5, 22), (2, 27, 22), (3, 49, 22)]) + [knob(1, 74, 8, 42, 42)]
         ),
         KeyboardLayout(
             name: "4 buttons, 1 knob",

@@ -42,20 +42,19 @@ enum PanelSection: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var section: PanelSection = .keys
     @State private var showLog = false
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(section: $section)
+            Sidebar(section: $model.section)
             Rectangle().fill(Theme.outline.opacity(0.35)).frame(width: 1)
 
             VStack(spacing: 0) {
-                SectionHeader(section: section, showLog: $showLog)
+                SectionHeader(section: model.section, showLog: $showLog)
                 Hairline()
 
                 Group {
-                    switch section {
+                    switch model.section {
                     case .keys: KeysSection()
                     case .backlight: BacklightSection()
                     case .apps: AppsSection()

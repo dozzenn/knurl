@@ -15,18 +15,30 @@ struct MenuBarPanel: View {
             scopeLine
             Hairline().padding(.vertical, 6)
 
+            // An explicit height: a ScrollView inside a menu bar window will
+            // not size itself from its content, and left to guess it collapsed
+            // and hid the built-in sets entirely.
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if !model.presets.isEmpty {
-                        SectionLabel(text: "Your presets")
-                        ForEach(model.presets) { preset in
-                            SetRow(title: preset.name,
-                                   detail: preset.summary,
-                                   tint: .identity(for: preset.name),
-                                   active: model.isActive(preset)) {
-                                model.apply(preset)
-                            }
+                    SectionLabel(text: "Your presets")
+                    if model.presets.isEmpty {
+                        Text("Nothing saved yet.")
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(Theme.textFaint)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 4)
+                    }
+                    ForEach(model.presets) { preset in
+                        SetRow(title: preset.name,
+                               detail: preset.summary,
+                               tint: .identity(for: preset.name),
+                               active: model.isActive(preset)) {
+                            model.apply(preset)
                         }
+                    }
+                    Row(title: "Save current keys as preset…", icon: "plus.circle") {
+                        model.section = .presets
+                        AppDelegate.showMainWindow()
                     }
 
                     SectionLabel(text: "Built in")
@@ -40,16 +52,28 @@ struct MenuBarPanel: View {
                     }
                 }
             }
-            .frame(maxHeight: 300)
+            .frame(height: listHeight)
 
             Hairline().padding(.vertical, 6)
 
-            Row(title: "Open Knurl", icon: "macwindow") { AppDelegate.showMainWindow() }
+            Row(title: "Open Knurl", icon: "macwindow") {
+                model.section = .keys
+                AppDelegate.showMainWindow()
+            }
             Row(title: "Quit", icon: "power") { NSApp.terminate(nil) }
         }
         .padding(.vertical, 8)
         .frame(width: 320)
         .background(PopoverBackground())
+    }
+
+    /// Sized from the rows actually present, capped so the panel cannot grow
+    /// past a sensible menu.
+    private var listHeight: CGFloat {
+        let rows = model.presets.count + TemplateLibrary.all.count + 1
+        let labels: CGFloat = 2 * 30
+        let empty: CGFloat = model.presets.isEmpty ? 20 : 0
+        return min(CGFloat(rows) * 38 + labels + empty, 372)
     }
 
     private var header: some View {

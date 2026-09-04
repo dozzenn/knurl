@@ -615,6 +615,10 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Which section the window is showing. Held here so the menu bar can send
+    /// the user somewhere specific instead of just raising the window.
+    @Published var section: PanelSection = .keys
+
     // MARK: - Appearance
 
     enum Appearance: String, CaseIterable {

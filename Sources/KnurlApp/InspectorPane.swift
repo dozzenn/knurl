@@ -81,15 +81,20 @@ private struct KeysEditor: View {
         Panel(title: "Shortcut") {
             SequenceWell()
 
+            // The record control gets the full width: sharing a row with the
+            // other two wrapped its label onto a second line.
+            RecordButton()
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+
             HStack(spacing: 8) {
-                RecordButton()
                 PanelButton(title: "Backspace", compact: true) { model.removeLastKey() }
                     .disabled(model.sequence.isEmpty)
                     .opacity(model.sequence.isEmpty ? 0.4 : 1)
                 Spacer()
                 Readout(text: "\(model.sequence.count)/\(model.maxKeystrokes)")
             }
-            .padding(.top, 10)
+            .padding(.top, 8)
 
             Text(hint)
                 .font(Theme.rowDetail)
@@ -136,10 +141,14 @@ private struct RecordButton: View {
                 Text(model.isRecording ? "STOP RECORDING" : "START RECORDING")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .tracking(0.9)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .foregroundStyle(model.isRecording ? Theme.textOnWell : Theme.text)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
-            .frame(height: 32)
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
             .modifier(RecordSurface(on: model.isRecording))
         }
         .buttonStyle(PressableStyle())

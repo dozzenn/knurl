@@ -482,6 +482,107 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Menu bar and hot key
+
+    @Published var hotKeyEnabled: Bool = UserDefaults.standard.object(forKey: "hotKeyEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(hotKeyEnabled, forKey: "hotKeyEnabled")
+            applyHotKey()
+        }
+    }
+
+    @Published var hideDockIcon: Bool = UserDefaults.standard.bool(forKey: "hideDockIcon") {
+        didSet {
+            UserDefaults.standard.set(hideDockIcon, forKey: "hideDockIcon")
+            applyActivationPolicy()
+        }
+    }
+
+    private var hotKey: GlobalHotKey?
+
+    /// Registered late enough that a failure (another app already owns the
+    /// combination) can be reported instead of silently doing nothing.
+    func applyHotKey() {
+        hotKey = nil
+        guard hotKeyEnabled else { return }
+        hotKey = GlobalHotKey(.default) {
+            PaletteController.shared.toggle()
+        }
+        if hotKey == nil {
+            setStatus("Could not register ⌃⌥⌘K — another app is already using it", error: true)
+        }
+    }
+
+    func applyActivationPolicy() {
+        NSApp.setActivationPolicy(hideDockIcon ? .accessory : .regular)
+    }
+
+    var hotKeyDisplay: [String] { GlobalHotKey.Combination.default.display }
+
+    // MARK: - Command palette
+
+    /// Everything the palette can run. Profiles come first because switching
+    /// the whole keypad in one keystroke is the reason the palette exists.
+    var paletteCommands: [PaletteCommand] {
+        var out: [PaletteCommand] = []
+
+        for entry in profiles {
+            out.append(PaletteCommand(
+                id: "profile:\(entry.id)",
+                title: entry.name,
+                subtitle: entry.name == activeProfileName ? "already loaded" : "load onto the keypad",
+                icon: "square.stack.3d.up",
+                group: "Profiles",
+                run: { [weak self] in self?.switchTo(entry) }
+            ))
+        }
+
+        out.append(PaletteCommand(
+            id: "save.all",
+            title: "Save to keypad",
+            subtitle: "write every mapping in this profile",
+            icon: "arrow.down.circle",
+            group: "Actions",
+            keys: ["⌘", "S"],
+            run: { [weak self] in self?.saveToKeyboard() }
+        ))
+        out.append(PaletteCommand(
+            id: "device.toggle",
+            title: isConnected ? "Disconnect keypad" : "Connect keypad",
+            subtitle: isConnected ? deviceLabel : "look for a keypad and open it",
+            icon: isConnected ? "cable.connector.slash" : "cable.connector",
+            group: "Actions",
+            run: { [weak self] in
+                guard let self else { return }
+                self.isConnected ? self.disconnect() : self.connect()
+            }
+        ))
+        out.append(PaletteCommand(
+            id: "window.open",
+            title: "Open MacroPad",
+            subtitle: "the full editor",
+            icon: "macwindow",
+            group: "Actions",
+            run: { NSApp.activate(ignoringOtherApps: true)
+                   NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil) }
+        ))
+        out.append(PaletteCommand(
+            id: "preset.import",
+            title: "Import preset…",
+            icon: "square.and.arrow.down",
+            group: "Presets",
+            run: { [weak self] in self?.importPreset() }
+        ))
+        out.append(PaletteCommand(
+            id: "preset.export",
+            title: "Export preset…",
+            icon: "square.and.arrow.up",
+            group: "Presets",
+            run: { [weak self] in self?.exportPreset() }
+        ))
+        return out
+    }
+
     // MARK: - Presets
 
     /// Writes the current profile to a file the user picks, so it can be moved

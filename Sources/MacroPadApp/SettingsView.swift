@@ -10,6 +10,37 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Text("General")
+                .font(.system(size: 15, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 1) {
+                SettingRow(title: "Command palette shortcut",
+                           detail: "Opens the palette from any app") {
+                    HStack(spacing: 8) {
+                        ShortcutHint(keys: model.hotKeyDisplay, emphasized: model.hotKeyEnabled)
+                        Toggle("", isOn: $model.hotKeyEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                }
+                SettingRow(title: "Menu bar only",
+                           detail: "Hide the Dock icon and live in the menu bar") {
+                    Toggle("", isOn: $model.hideDockIcon)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 10)
+
+            Divider().background(Theme.hairline).padding(.vertical, 14)
+
             Text("Protocol")
                 .font(.system(size: 15, weight: .semibold))
                 .tracking(-0.2)
@@ -87,7 +118,7 @@ struct SettingsView: View {
 
             Spacer(minLength: 16)
         }
-        .frame(width: 480, height: 400)
+        .frame(width: 500, height: 560)
     }
 }
 

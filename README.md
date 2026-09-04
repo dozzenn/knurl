@@ -8,6 +8,9 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
 
 ## What it does
 
+* Lives in the menu bar, with a command palette on ⌃⌥⌘K for switching profiles
+  from any app without opening the window
+
 * Auto-detects the pad's vendor-defined HID configuration interface
 * Maps each button and each knob action (turn left / press / turn right) to:
   * a **key sequence** with modifiers, recorded live or picked from a list
@@ -58,6 +61,19 @@ Give the keypad a nickname from the device card in the top left, and keep whole
 sets of mappings as profiles from the card next to it — switching a profile
 writes it to the hardware. Profiles can also be exported to and imported from
 files as presets.
+
+## Menu bar and the command palette
+
+The menu bar icon shows whether a keypad is connected and switches profiles in
+one click. **⌃⌥⌘K** opens a command palette from any app: type a profile name and
+press Return to load it onto the keypad, or search for save, connect, import and
+export. Both the shortcut and the Dock icon can be turned off in Settings, so the
+app can live in the menu bar alone.
+
+The shortcut is registered through Carbon's `RegisterEventHotKey`, which needs no
+Accessibility or Input Monitoring permission — the palette works from first
+launch. If another app already owns the combination, registration fails and the
+app says so rather than going quiet.
 
 ## If uploads are accepted but nothing changes
 

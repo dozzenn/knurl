@@ -13,11 +13,17 @@ struct InspectorPane: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    switch model.editorTab {
-                    case .keys:  KeysEditor()
-                    case .media: MediaEditor()
-                    case .mouse: MouseEditor()
-                    case .led:   LedEditor()
+                    if let note = model.unsupportedNote {
+                        EmptyStateView(icon: "exclamationmark.triangle",
+                                       title: "Not supported on this device",
+                                       message: note)
+                    } else {
+                        switch model.editorTab {
+                        case .keys:  KeysEditor()
+                        case .media: MediaEditor()
+                        case .mouse: MouseEditor()
+                        case .led:   LedEditor()
+                        }
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
@@ -73,7 +79,7 @@ private struct KeysEditor: View {
                 .disabled(model.sequence.isEmpty)
                 .opacity(model.sequence.isEmpty ? 0.4 : 1)
             Spacer()
-            Text("\(model.sequence.count)/\(model.layout.maxCharacters)")
+            Text("\(model.sequence.count)/\(model.maxKeystrokes)")
                 .font(Theme.mono)
                 .foregroundStyle(Theme.textFaint)
         }

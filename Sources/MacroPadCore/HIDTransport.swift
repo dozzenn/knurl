@@ -18,8 +18,11 @@ public struct PadCandidate: Identifiable, Hashable {
     /// True when this looks like the vendor-defined configuration interface
     /// rather than the plain keyboard/mouse interfaces the pad also exposes.
     public let isVendorInterface: Bool
-    /// Set when the interface matches an entry in the known-device table.
+    /// Set only when the wire protocol for this hardware has been established.
     public let knownProtocol: PadProtocol?
+    /// True when the hardware is in the known-device table, whether or not its
+    /// protocol has been worked out.
+    public let isKnownHardware: Bool
     /// True when the same physical device also exposes a plain keyboard interface,
     /// which is what a macro pad looks like and a trackpad or display does not.
     public var hasKeyboardSibling: Bool = false
@@ -27,7 +30,7 @@ public struct PadCandidate: Identifiable, Hashable {
     /// How likely this interface is to be a macro pad's configuration channel.
     public var score: Int {
         var s = 0
-        if knownProtocol != nil { s += 100 }
+        if isKnownHardware { s += 100 }
         if isVendorInterface { s += 20 }
         if maxOutputReportSize >= 64 { s += 20 }
         if hasKeyboardSibling { s += 30 }
@@ -75,6 +78,9 @@ public struct HIDLogEntry: Identifiable {
 public final class PadTransport {
 
     public private(set) var candidates: [PadCandidate] = []
+    /// Every HID interface on the machine, unfiltered — the keyboard interfaces
+    /// a pad exposes are needed when reverse engineering what a key emits.
+    public private(set) var allInterfaces: [PadCandidate] = []
     public private(set) var openedCandidate: PadCandidate?
 
     /// Called on the main run loop whenever the device list changes.
@@ -100,8 +106,10 @@ public final class PadTransport {
         public let vendorId: UInt16
         public let productId: UInt16
         public let interfaceNumber: Int
-        public let proto: PadProtocol
-        public init(_ vid: UInt16, _ pid: UInt16, _ iface: Int, _ proto: PadProtocol) {
+        /// nil means the hardware is recognised but its wire protocol has not
+        /// been established — the app must not claim one it cannot support.
+        public let proto: PadProtocol?
+        public init(_ vid: UInt16, _ pid: UInt16, _ iface: Int, _ proto: PadProtocol?) {
             vendorId = vid; productId = pid; interfaceNumber = iface; self.proto = proto
         }
     }
@@ -114,8 +122,15 @@ public final class PadTransport {
         KnownDevice(0x1189, 0x8832, 0, .extended),
         KnownDevice(0x1189, 0x8833, 0, .extended),
         KnownDevice(0x1189, 0x8810, 0, .extended),
-        // SDINNOVATION "SIDE-KEYBOARD" and relatives: report id 0, 64-byte reports.
-        KnownDevice(0x6D7B, 0xDCFA, 2, .extended),
+        // SDCX / Huali family, configured by the vendor's WebHID tool. The
+        // frame format was read out of that tool and verified against a
+        // SIDE-KEYBOARD (6D7B:DCFA) by writing a key and reading it back.
+        KnownDevice(0x6D7B, 0xDCFA, 2, .webHub),
+        KnownDevice(0x6D7C, 0xDCFB, 2, .webHub),
+        KnownDevice(0x6D7D, 0xDCFC, 2, .webHub),
+        KnownDevice(0x6D7E, 0xDCFD, 2, .webHub),
+        KnownDevice(0x6D7F, 0xDCFE, 2, .webHub),
+        KnownDevice(0x68BD, 0xDCFC, 2, .webHub),
     ]
 
     // MARK: - Discovery
@@ -156,12 +171,15 @@ public final class PadTransport {
         }
 
         var found: [PadCandidate] = []
+        var every: [PadCandidate] = []
         var map: [String: IOHIDDevice] = [:]
         for (var c, dev) in all {
             c.hasKeyboardSibling = keyboardOwners.contains(Self.physicalKey(c))
+            every.append(c)
+            map[c.id] = dev
             // Only interfaces that could carry a 64-byte configuration frame.
             guard c.maxOutputReportSize >= 64 || c.maxFeatureReportSize >= 64 else { continue }
-            guard c.isVendorInterface || c.knownProtocol != nil else { continue }
+            guard c.isVendorInterface || c.isKnownHardware else { continue }
             found.append(c)
             map[c.id] = dev
         }
@@ -172,6 +190,10 @@ public final class PadTransport {
         }
 
         candidates = found
+        allInterfaces = every.sorted {
+            ($0.vendorId, $0.productId, $0.interfaceNumber ?? 99)
+                < ($1.vendorId, $1.productId, $1.interfaceNumber ?? 99)
+        }
         deviceMap = map
 
         // Drop a stale handle if the open device disappeared.
@@ -221,7 +243,8 @@ public final class PadTransport {
             maxFeatureReportSize: intProp(dev, kIOHIDMaxFeatureReportSizeKey) ?? 0,
             maxInputReportSize: intProp(dev, kIOHIDMaxInputReportSizeKey) ?? 0,
             isVendorInterface: usagePage >= 0xFF00,
-            knownProtocol: known?.proto
+            knownProtocol: known?.proto ?? nil,
+            isKnownHardware: known != nil
         )
     }
 

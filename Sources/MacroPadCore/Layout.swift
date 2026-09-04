@@ -132,6 +132,15 @@ public enum LayoutLibrary {
                 + [knob(1, 5, 5), knob(2, 45, 5)]
         ),
         KeyboardLayout(
+            // SDINNOVATION SIDE-KEYBOARD. Layout taken from the vendor's own
+            // definition file (6d7b_dcfa.json, "keyboard3n1"): three keys in a
+            // row plus one knob, one layer, six stored profiles.
+            name: "3 keys, 1 knob (SIDE-KEYBOARD)",
+            products: [(0x6D7B, 0xDCFA)],
+            layerCount: 1, maxCharacters: 1, supportsDelay: false, supportsColor: false, ledModeCount: 6,
+            controls: buttons([(1, 5, 20), (2, 27, 20), (3, 49, 20)]) + [knob(1, 78, 15, 26, 26)]
+        ),
+        KeyboardLayout(
             name: "4 buttons, 1 knob",
             products: [],
             layerCount: 3, maxCharacters: 18, supportsDelay: true, supportsColor: true, ledModeCount: 6,

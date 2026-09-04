@@ -7,12 +7,20 @@ import Foundation
 public enum PadProtocol: String, Codable, CaseIterable, Sendable {
     case legacy
     case extended
+    /// The SDCX / Huali family, configured by the vendor's WebHID tool.
+    case webHub
 
     public var displayName: String {
         switch self {
         case .legacy: return "Legacy (v0)"
         case .extended: return "Extended (v1)"
+        case .webHub: return "WebHub (SDCX/Huali)"
         }
+    }
+
+    /// Keystrokes one mapping can hold on this protocol.
+    public var maxKeystrokesPerControl: Int {
+        self == .webHub ? WebHubComposer.maxKeystrokes : 18
     }
 }
 

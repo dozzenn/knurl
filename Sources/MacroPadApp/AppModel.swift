@@ -93,6 +93,29 @@ final class AppModel: ObservableObject {
         ComposerFactory.make(activeProtocol, reportId: reportId, mediaEncoding: mediaEncoding)
     }
 
+    /// Keystrokes one mapping can hold, given both the device layout and what
+    /// the protocol itself can express.
+    var maxKeystrokes: Int {
+        min(layout.maxCharacters, activeProtocol.maxKeystrokesPerControl)
+    }
+
+    /// Which editors this protocol can actually write. Showing a control that
+    /// silently does nothing is worse than saying it is not supported yet.
+    func supports(_ tab: EditorTab) -> Bool {
+        guard activeProtocol == .webHub else { return true }
+        switch tab {
+        case .keys, .media: return true
+        case .mouse, .led: return false
+        }
+    }
+
+    var unsupportedNote: String? {
+        guard activeProtocol == .webHub, !supports(editorTab) else { return nil }
+        return editorTab == .mouse
+            ? "Mouse actions are not supported on this device yet — its encoding for them has not been worked out, and writing a guess would corrupt the key table."
+            : "Backlight is not supported on this device yet — it uses a separate command set that has not been worked out."
+    }
+
     init() {
         transport.onDeviceListChanged = { [weak self] in
             Task { @MainActor in self?.deviceListChanged() }
@@ -222,8 +245,10 @@ final class AppModel: ObservableObject {
     }
 
     private func record(_ event: NSEvent) {
-        guard sequence.count < layout.maxCharacters else {
-            setStatus("This device holds at most \(layout.maxCharacters) keystrokes", error: true)
+        guard sequence.count < maxKeystrokes else {
+            setStatus(maxKeystrokes == 1
+                      ? "This device stores one keystroke per key — clear it to record a different one"
+                      : "This device holds at most \(maxKeystrokes) keystrokes", error: true)
             return
         }
         guard let usage = HIDKeyboard.virtualKeyToUsage[event.keyCode] else { return }
@@ -245,7 +270,7 @@ final class AppModel: ObservableObject {
     }
 
     func addKey(usage: UInt8, modifiers: Modifier) {
-        guard sequence.count < layout.maxCharacters else { return }
+        guard sequence.count < maxKeystrokes else { return }
         sequence.append(KeyStroke(usage: usage, modifiers: modifiers))
         commit()
     }
@@ -275,7 +300,16 @@ final class AppModel: ObservableObject {
                 setStatus("Select a key or knob action first", error: true)
                 return
             }
-            reports = composer.reports(for: currentBinding, action: selectedAction, layer: layer)
+            if let note = unsupportedNote {
+                setStatus(note, error: true)
+                return
+            }
+            if case .unset = currentBinding, let webhub = composer as? WebHubComposer {
+                // "Nothing" is a real state on this protocol: write the disabled entry.
+                reports = webhub.clear(action: selectedAction, layer: layer)
+            } else {
+                reports = composer.reports(for: currentBinding, action: selectedAction, layer: layer)
+            }
             if reports.isEmpty {
                 setStatus("Nothing mapped to \(selectedAction.displayName)", error: true)
                 return

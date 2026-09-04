@@ -32,10 +32,15 @@ There is also a diagnostic CLI:
 
 ```bash
 swift build
-.build/debug/macropad-probe list     # show candidate configuration interfaces
-.build/debug/macropad-probe probe    # open the pad, test each report id/channel
-.build/debug/macropad-probe listen   # dump input reports from the pad
+.build/debug/macropad-probe list        # candidate configuration interfaces
+.build/debug/macropad-probe interfaces  # every HID interface, keyboards included
+.build/debug/macropad-probe info        # ask a WebHub device to describe itself
+.build/debug/macropad-probe readkeys 0  # dump the key table for a layer
+.build/debug/macropad-probe setkey 0 0 32 00 1D 00   # index, layer, type, c1, c2, c3
+.build/debug/macropad-probe sniff 6D7B DCFA 60       # watch what the pad emits
 ```
+
+`info`, `readkeys`, `interfaces` and `sniff` only read; `setkey` writes.
 
 ## First run
 
@@ -65,7 +70,8 @@ to try the next setting above.
 
 ## Protocol notes
 
-Both wire formats are ported from the original project.
+Three wire formats are supported. Two are ported from the original project; the
+third was reverse engineered for this app.
 
 **Extended** — one 64-byte frame per mapping:
 
@@ -81,9 +87,36 @@ pairs using standard HID keyboard usage ids.
 frame (`A1 <layer>`) and a flash-write frame (`AA AA`). Frame 0 announces the
 sequence length, frames 1..n carry one keystroke each.
 
-The one deliberate deviation from the original: keypad Enter is sent as HID
-usage `0x58` rather than `0x64`, and non-US backslash as `0x64`, which is what
-the USB HID usage tables actually specify.
+**WebHub (SDCX / Huali family)** — used by pads that the vendor configures with
+its browser-based WebHID tool at huali-tech.com / sdcx-tech.com. Frames are 64
+bytes on report id 0; byte 0 is always `06` and byte 1 the sub-command:
+
+| Frame | Meaning |
+|---|---|
+| `06 05` | read device info — replies `AA 05 <len> …` with pid, firmware, profile and layer counts |
+| `06 08 3A <offLo> <offHi> 00 <layer>` | read a 56-byte block of the key table |
+| `06 10 07 <offLo> <offHi> 00 <layer> 00 <type> <c1> <c2> <c3>` | write one key, offset = `4 × keyIndex` |
+| `06 09 <len> <offLo> <offHi> 00 <layer> 00 …` | write a block of entries |
+| `06 0F FF` | factory reset |
+| `06 FB <n>` | select stored profile |
+
+Each key is four bytes, `[type, code1, code2, code3]`. Types: `0x13` disabled,
+`0x20` a standard key (`code1` = HID modifier mask, `code2` = HID usage),
+`0x30` a consumer key (`code1`/`code2` = little-endian consumer usage), `0x11`
+mouse move, `0x60` macro, `0x80` open a website, `0xFF` custom combination.
+Buttons occupy table indices 0–15; each knob owns three consecutive slots from
+16 (press, then the two rotations).
+
+Not yet implemented for this family: mouse actions, backlight, and multi-key
+macros — macros live in a separate table addressed by its own commands. The app
+refuses to write those rather than guessing at the encoding.
+
+Note that sub-command `0x5A` on this family jumps the device into its bootloader,
+which is why blind command sweeping is a bad way to explore it.
+
+The one deliberate deviation from the original two protocols: keypad Enter is
+sent as HID usage `0x58` rather than `0x64`, and non-US backslash as `0x64`,
+which is what the USB HID usage tables actually specify.
 
 ## Known devices
 
@@ -93,7 +126,8 @@ the USB HID usage tables actually specify.
 | 1189:8890 | 1 | Legacy |
 | 1189:8830–8833 | 0 | Extended |
 | 1189:8810 | 0 | Extended |
-| 6D7B:DCFA (SDINNOVATION SIDE-KEYBOARD) | 2 | Extended |
+| 6D7B:DCFA (SDINNOVATION SIDE-KEYBOARD) | 2 | WebHub |
+| 6D7C:DCFB, 6D7D:DCFC, 6D7E:DCFD, 6D7F:DCFE, 68BD:DCFC | 2 | WebHub |
 
 Any other pad is still found automatically: the app looks for a HID interface
 on a vendor-defined usage page (≥ 0xFF00) with 64-byte reports, belonging to a

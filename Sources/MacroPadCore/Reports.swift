@@ -212,6 +212,7 @@ public enum ComposerFactory {
         switch proto {
         case .legacy: return LegacyComposer(reportId: reportId, mediaEncoding: mediaEncoding)
         case .extended: return ExtendedComposer(reportId: reportId, mediaEncoding: mediaEncoding)
+        case .webHub: return WebHubComposer(reportId: reportId, mediaEncoding: .consumerUsage)
         }
     }
 
@@ -219,4 +220,137 @@ public enum ComposerFactory {
     public static func versionProbe(reportId: UInt8) -> PadReport {
         PadReport(reportId: reportId)
     }
+}
+
+// MARK: - WebHub protocol (SDCX / Huali family)
+
+/// The protocol spoken by the vendor's browser-based configurator at
+/// huali-tech.com / sdcx-tech.com, used by SDINNOVATION-built pads.
+///
+/// Frames are 64 bytes on report id 0. Byte 0 is always 6 ("device data"),
+/// byte 1 the sub-command. The key table is a flat array of 4-byte entries
+/// `[type, code1, code2, code3]` addressed by a byte offset of `4 * keyIndex`.
+///
+/// Verified against an SDINNOVATION SIDE-KEYBOARD (6D7B:DCFA): a read of the
+/// table returned `[32, 0x01, 0x04, 0]` for its three keys, which is the
+/// Ctrl+A the hardware actually types, and a write followed by a read back
+/// returned exactly the bytes written.
+public struct WebHubComposer: ReportComposer {
+    public let reportId: UInt8
+    public let mediaEncoding: MediaEncoding
+
+    public init(reportId: UInt8 = 0, mediaEncoding: MediaEncoding = .consumerUsage) {
+        self.reportId = 0            // the descriptor declares no report ids
+        self.mediaEncoding = mediaEncoding
+    }
+
+    /// Sub-commands on the byte-1 slot.
+    enum Sub: UInt8 {
+        case readConfig = 5
+        case readKeys = 8
+        case writeKeyBlock = 9
+        case factoryReset = 15
+        case writeKey = 16
+        case selectProfile = 251
+    }
+
+    /// Entry types in the key table.
+    public enum EntryType: UInt8 {
+        case mouseMove = 0x11
+        case disabled = 0x13
+        case standard = 0x20
+        case consumer = 0x30
+        case macro = 0x60
+        case openWebsite = 0x80
+        case customCombination = 0xFF
+    }
+
+    /// Where a control lives in the flat key table.
+    /// Buttons occupy 0…15; each knob owns three slots from 16 on.
+    public static func keyIndex(for action: InputAction) -> Int? {
+        switch action {
+        case .none: return nil
+        case .key1, .key2, .key3, .key4, .key5, .key6,
+             .key7, .key8, .key9, .key10, .key11, .key12:
+            return Int(action.rawValue) - 1
+        default:
+            let knob = (Int(action.rawValue) - 23) / 3          // 0-based knob number
+            let part = (Int(action.rawValue) - 23) % 3          // 0 = left, 1 = push, 2 = right
+            // The firmware orders a knob's slots press, then the two rotations.
+            let slot: Int
+            switch part {
+            case 1: slot = 0        // push
+            case 2: slot = 1        // right / clockwise
+            default: slot = 2       // left / counter-clockwise
+            }
+            return 16 + knob * 3 + slot
+        }
+    }
+
+    private func writeKey(index: Int, layer: UInt8, type: EntryType,
+                          _ c1: UInt8, _ c2: UInt8, _ c3: UInt8) -> PadReport {
+        let offset = 4 * index
+        return PadReport(reportId: reportId, data: [
+            6,
+            Sub.writeKey.rawValue,
+            7,                                  // payload length
+            UInt8(offset & 0xFF),
+            UInt8((offset >> 8) & 0xFF),
+            0,
+            layer,
+            0,
+            type.rawValue, c1, c2, c3,
+        ])
+    }
+
+    /// The frame that asks the device to describe itself. Read-only.
+    public static func deviceInfoRequest() -> PadReport {
+        PadReport(reportId: 0, data: [6, Sub.readConfig.rawValue])
+    }
+
+    /// The frame that reads one 56-byte block of the key table. Read-only.
+    public static func keyTableRequest(blockOffset: Int, layer: UInt8) -> PadReport {
+        PadReport(reportId: 0, data: [
+            6, Sub.readKeys.rawValue, 58,
+            UInt8(blockOffset & 0xFF), UInt8((blockOffset >> 8) & 0xFF),
+            0, layer,
+        ])
+    }
+
+    public func keys(action: InputAction, layer: UInt8, delay: UInt16, sequence: [KeyStroke]) -> [PadReport] {
+        guard let index = Self.keyIndex(for: action) else { return [] }
+        guard let stroke = sequence.first else {
+            return [writeKey(index: index, layer: layer, type: .disabled, 0, 0, 0)]
+        }
+        // A table entry holds one keystroke; longer sequences need the separate
+        // macro table, which this build does not write yet.
+        return [writeKey(index: index, layer: layer, type: .standard,
+                         stroke.modifiers.rawValue, stroke.usage, 0)]
+    }
+
+    public func media(action: InputAction, layer: UInt8, key: MediaKey) -> [PadReport] {
+        guard let index = Self.keyIndex(for: action) else { return [] }
+        return [writeKey(index: index, layer: layer, type: .consumer,
+                         UInt8(key.usage & 0xFF), UInt8(key.usage >> 8), 0)]
+    }
+
+    public func mouse(action: InputAction, layer: UInt8, button: MouseButton, modifiers: Modifier) -> [PadReport] {
+        // The mouse entry encoding for this family has not been established, and
+        // writing a guess would put junk in the key table.
+        []
+    }
+
+    public func led(layer: UInt8, mode: LedMode, color: LedColor) -> [PadReport] {
+        // Backlight uses a separate command set that is not worked out yet.
+        []
+    }
+
+    /// Clears a control back to "does nothing".
+    public func clear(action: InputAction, layer: UInt8) -> [PadReport] {
+        guard let index = Self.keyIndex(for: action) else { return [] }
+        return [writeKey(index: index, layer: layer, type: .disabled, 0, 0, 0)]
+    }
+
+    /// How many keystrokes one table entry can hold.
+    public static let maxKeystrokes = 1
 }

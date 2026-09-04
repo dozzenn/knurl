@@ -47,10 +47,17 @@ swift build
 1. Plug in the pad and open the app. The device menu in the toolbar should
    already show it; a green dot means connected.
 2. Click a button (or a knob's ↺ / ⏺ / ↻ segment) in the pad view.
-3. In the inspector, hit **Record** and type the shortcut. Keys typed while
-   recording are captured, not executed.
-4. Press **Upload** (⌘U) to write that one control, or **Upload all** (⇧⌘U) for
-   the whole profile.
+3. In the inspector, hit **Start recording** and type the shortcut. Keys typed
+   while recording are captured, not executed; Escape leaves the mode. Keys a
+   Mac keyboard cannot send (F13–F24, Print Screen, Num Lock, keypad) are picked
+   from the list underneath instead.
+4. Press **Save to keypad** (⌘S). **Save this key** (⌥⌘S) writes only the
+   selected control.
+
+Give the keypad a nickname from the device card in the top left, and keep whole
+sets of mappings as profiles from the card next to it — switching a profile
+writes it to the hardware. Profiles can also be exported to and imported from
+files as presets.
 
 ## If uploads are accepted but nothing changes
 

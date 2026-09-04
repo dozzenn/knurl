@@ -69,23 +69,27 @@ private struct KeysEditor: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        SectionLabel(text: "Sequence")
-
+        SectionLabel(text: "Shortcut")
         SequenceStrip()
 
-        HStack(spacing: 6) {
-            RecordButton()
-            BarAction(title: "Backspace", keys: ["⌫"]) { model.removeLastKey() }
-                .disabled(model.sequence.isEmpty)
-                .opacity(model.sequence.isEmpty ? 0.4 : 1)
-            Spacer()
-            Text("\(model.sequence.count)/\(model.maxKeystrokes)")
-                .font(Theme.mono)
-                .foregroundStyle(Theme.textFaint)
-        }
-        .padding(.top, 8)
+        RecordButton()
+            .padding(.top, 8)
 
-        ManualKeyRow()
+        HStack(spacing: 8) {
+            Text(hint)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
+            if !model.sequence.isEmpty {
+                Button("Clear") { model.clearBinding() }
+                    .buttonStyle(BarButtonStyle())
+            }
+        }
+        .padding(.horizontal, 3)
+        .padding(.top, 7)
+
+        ManualKeySection()
 
         if model.layout.supportsDelay {
             SectionLabel(text: "Repeat delay")
@@ -104,46 +108,70 @@ private struct KeysEditor: View {
             .padding(.horizontal, 9)
         }
     }
+
+    private var hint: String {
+        if model.isRecording {
+            return "Keys you press are captured here instead of doing what they normally do."
+        }
+        if model.maxKeystrokes == 1 {
+            return "This keypad stores one shortcut per key."
+        }
+        return "Up to \(model.maxKeystrokes) keystrokes, played back in order."
+    }
 }
 
-/// Recording is a mode, and a mode needs to be unmistakable — the button turns
-/// red and a live line explains that keys are being swallowed, not executed.
+/// Recording is a mode, so the control states plainly which mode you are in and
+/// what will happen next — "Start recording" rather than a bare "Record".
 private struct RecordButton: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
+    @State private var pulsing = false
 
     var body: some View {
         Button {
             model.isRecording.toggle()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(model.isRecording ? Theme.accent : Theme.textMuted)
-                    .frame(width: 7, height: 7)
-                Text(model.isRecording ? "Recording — press keys" : "Record")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(model.isRecording ? Theme.text : Theme.textMuted)
+                    .frame(width: 8, height: 8)
+                    .opacity(model.isRecording && pulsing && !reduceMotion ? 0.35 : 1)
+                Text(model.isRecording ? "Stop recording" : "Start recording")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                ShortcutHint(keys: model.isRecording ? ["esc"] : [], emphasized: false)
             }
-            .padding(.horizontal, 9)
-            .frame(height: 26)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
             .background(
                 RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(model.isRecording ? Theme.accent.opacity(0.22)
-                          : (hovering ? Theme.rowHover : Theme.fill))
+                    .fill(model.isRecording ? Theme.accent.opacity(0.24)
+                          : (hovering ? Theme.fillStrong : Theme.fill))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .strokeBorder(model.isRecording ? Theme.accent.opacity(0.55) : Theme.hairline,
+                    .strokeBorder(model.isRecording ? Theme.accent.opacity(0.6) : Theme.hairline,
                                   lineWidth: 1)
             )
         }
         .buttonStyle(PressableStyle())
         .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+        .onChange(of: model.isRecording) { on in
+            guard !reduceMotion else { return }
+            if on {
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulsing = true }
+            } else {
+                pulsing = false
+            }
+        }
     }
 }
 
-/// Recorded steps are drawn with the same keycaps used for shortcut hints, so a
-/// macro looks like the shortcut it will type.
+/// Recorded steps use the same keycaps as the shortcut hints, so a mapping
+/// looks like the shortcut it will type.
 private struct SequenceStrip: View {
     @EnvironmentObject private var model: AppModel
 
@@ -151,8 +179,7 @@ private struct SequenceStrip: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
                 if model.sequence.isEmpty {
-                    Text(model.isRecording ? "Press the keys you want on this button…"
-                                           : "Nothing recorded yet")
+                    Text(model.isRecording ? "Press the keys now…" : "No shortcut set")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textFaint)
                         .padding(.leading, 3)
@@ -162,10 +189,10 @@ private struct SequenceStrip: View {
                     }
                 }
             }
-            .padding(.horizontal, 9)
-            .frame(minHeight: 46)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 52)
         }
-        .frame(height: 46)
+        .frame(height: 52)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
@@ -173,7 +200,7 @@ private struct SequenceStrip: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .strokeBorder(model.isRecording ? Theme.accent.opacity(0.45) : Theme.hairline,
+                .strokeBorder(model.isRecording ? Theme.accent.opacity(0.5) : Theme.hairline,
                               lineWidth: 1)
         )
     }
@@ -198,17 +225,37 @@ private struct StrokeChip: View {
     }
 }
 
-/// Keys a Mac keyboard cannot produce — Print Screen, Num Lock, F13+ — still
-/// need a way in, one level down from recording.
-private struct ManualKeyRow: View {
+/// Some keys cannot be recorded because a Mac keyboard has no way to send them.
+/// This is the way in for those, and it says so rather than calling itself
+/// "add a key by name".
+private struct ManualKeySection: View {
     @EnvironmentObject private var model: AppModel
-    @State private var usage: UInt8 = 0x04
+    @State private var usage: UInt8 = 0x68     // F13 — the common reason to be here
     @State private var mods: Modifier = .none
 
-    var body: some View {
-        SectionLabel(text: "Add a key by name")
+    private var preview: [String] {
+        var out: [String] = []
+        if mods.contains(.leftCtrl) { out.append("⌃") }
+        if mods.contains(.leftAlt) { out.append("⌥") }
+        if mods.contains(.leftShift) { out.append("⇧") }
+        if mods.contains(.leftGui) { out.append("⌘") }
+        out.append(HIDKeyboard.name(for: usage))
+        return out
+    }
 
-        HStack(spacing: 7) {
+    var body: some View {
+        SectionLabel(text: "Key your Mac can't type")
+
+        Text("F13–F24, Print Screen, Num Lock and the numeric keypad have no key on a Mac keyboard, so pick them here instead of recording.")
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.textFaint)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 3)
+            .padding(.bottom, 9)
+
+        HStack(spacing: 8) {
+            ModifierRow(modifiers: $mods)
+                .fixedSize()
             Picker("", selection: $usage) {
                 ForEach(HIDKeyboard.selectable, id: \.self) { u in
                     Text(HIDKeyboard.name(for: u)).tag(u)
@@ -216,18 +263,19 @@ private struct ManualKeyRow: View {
             }
             .labelsHidden()
             .controlSize(.small)
-            .frame(maxWidth: 132)
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 3)
 
-            BarAction(title: "Add", prominent: true) {
+        HStack(spacing: 9) {
+            ShortcutHint(keys: preview, emphasized: true)
+            Spacer()
+            BarAction(title: "Add to shortcut", prominent: true) {
                 model.addKey(usage: usage, modifiers: mods)
             }
-            Spacer()
         }
-        .padding(.horizontal, 9)
-
-        ModifierRow(modifiers: $mods)
-            .padding(.horizontal, 9)
-            .padding(.top, 7)
+        .padding(.horizontal, 3)
+        .padding(.top, 9)
     }
 }
 
@@ -264,7 +312,6 @@ struct ModifierRow: View {
                 }
                 .buttonStyle(PressableStyle())
             }
-            Spacer()
         }
     }
 }

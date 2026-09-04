@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 import Combine
 import SwiftUI
 import MacroPadCore
@@ -75,12 +76,64 @@ final class AppModel: ObservableObject {
     private let transport = PadTransport()
     private var recorderMonitor: Any?
 
+    /// Per-device nicknames, keyed by vendor:product so the name survives
+    /// unplugging and re-plugging.
+    @Published private var nicknames: [String: String] = [:]
+    private static let nicknameKey = "deviceNicknames"
+
     var visibleCandidates: [PadCandidate] {
         showAllInterfaces ? candidates : candidates.filter(\.isLikelyPad)
     }
 
     var selectedCandidate: PadCandidate? {
         candidates.first { $0.id == selectedCandidateID }
+    }
+
+    // MARK: - Device names
+
+    private func nicknameKey(for candidate: PadCandidate) -> String {
+        String(format: "%04X:%04X", candidate.vendorId, candidate.productId)
+    }
+
+    func nickname(for candidate: PadCandidate) -> String? {
+        nicknames[nicknameKey(for: candidate)]
+    }
+
+    func setNickname(_ name: String?, for candidate: PadCandidate) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = nicknameKey(for: candidate)
+        if let trimmed, !trimmed.isEmpty {
+            nicknames[key] = trimmed
+        } else {
+            nicknames.removeValue(forKey: key)
+        }
+        UserDefaults.standard.set(nicknames, forKey: Self.nicknameKey)
+    }
+
+    /// What a device is called: the nickname the user gave it, else the name it
+    /// reports, else a placeholder.
+    func displayName(for candidate: PadCandidate) -> String {
+        if let n = nickname(for: candidate) { return n }
+        return candidate.product.isEmpty ? "HID device" : candidate.product
+    }
+
+    var deviceLabel: String {
+        guard let c = selectedCandidate else {
+            return candidates.isEmpty ? "No keypad found" : "Choose keypad"
+        }
+        return displayName(for: c)
+    }
+
+    /// One line under the device name: what it is and how many keys it has.
+    var deviceDetail: String {
+        guard let c = selectedCandidate else { return "Plug one in to get started" }
+        let keys = layout.controls.filter { if case .button = $0.kind { return true }; return false }.count
+        let knobs = layout.controls.count - keys
+        var parts = ["\(keys) keys"]
+        if knobs > 0 { parts.append(knobs == 1 ? "1 knob" : "\(knobs) knobs") }
+        parts.append(activeProtocol.displayName)
+        _ = c
+        return parts.joined(separator: " · ")
     }
 
     /// Protocol actually used for composing: explicit override, else the
@@ -123,6 +176,7 @@ final class AppModel: ObservableObject {
         transport.onLog = { [weak self] entry in
             Task { @MainActor in self?.append(entry) }
         }
+        nicknames = (UserDefaults.standard.dictionary(forKey: Self.nicknameKey) as? [String: String]) ?? [:]
         transport.startMonitoring()
         deviceListChanged()
         refreshProfiles()
@@ -245,6 +299,12 @@ final class AppModel: ObservableObject {
     }
 
     private func record(_ event: NSEvent) {
+        // Escape leaves the mode. Escape itself can still be mapped from the
+        // key picker, which is the only way to reach several keys anyway.
+        if event.keyCode == 53, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty {
+            isRecording = false
+            return
+        }
         guard sequence.count < maxKeystrokes else {
             setStatus(maxKeystrokes == 1
                       ? "This device stores one keystroke per key — clear it to record a different one"
@@ -283,7 +343,8 @@ final class AppModel: ObservableObject {
 
     // MARK: - Upload
 
-    func uploadSelected() {
+    /// Writes just the selected control to the hardware.
+    func saveSelectedKey() {
         isRecording = false
         guard ensureConnected() else { return }
         commit()
@@ -315,10 +376,11 @@ final class AppModel: ObservableObject {
                 return
             }
         }
-        send(reports, describing: editorTab == .led ? "LED settings" : selectedAction.displayName)
+        send(reports, describing: editorTab == .led ? "backlight" : selectedAction.displayName)
     }
 
-    func uploadAll() {
+    /// Writes the whole profile to the hardware — the everyday action.
+    func saveToKeyboard() {
         isRecording = false
         guard ensureConnected() else { return }
         commit()
@@ -329,10 +391,11 @@ final class AppModel: ObservableObject {
         }
         reports.append(contentsOf: composer.led(layer: layer, mode: profile.ledMode, color: profile.ledColor))
         guard !reports.isEmpty else {
-            setStatus("Nothing to upload — no mappings configured", error: true)
+            setStatus("Nothing to save yet — map a key first", error: true)
             return
         }
-        send(reports, describing: "\(profile.configured(layerCount: layout.layerCount).count) mapping(s)")
+        let n = profile.configured(layerCount: layout.layerCount).count
+        send(reports, describing: n == 1 ? "1 key" : "\(n) keys")
     }
 
     private func ensureConnected() -> Bool {
@@ -344,13 +407,13 @@ final class AppModel: ObservableObject {
     private func send(_ reports: [PadReport], describing what: String) {
         for report in reports {
             if case .failure(let error) = transport.write(report, channel: channel) {
-                setStatus("Upload failed: \(error.localizedDescription)", error: true)
+                setStatus("Could not save: \(error.localizedDescription)", error: true)
                 return
             }
             // The firmware drops frames that arrive back to back.
             usleep(15_000)
         }
-        setStatus("Uploaded \(what) — \(reports.count) report(s)")
+        setStatus("Saved \(what) to the keypad")
     }
 
     /// Sends a zero frame on each report id to see which ones the device takes.
@@ -384,7 +447,7 @@ final class AppModel: ObservableObject {
             if let match = LayoutLibrary.all.first(where: { $0.name == loaded.layoutName }) { layout = match }
             loadEditor()
             if isConnected {
-                uploadAll()
+                saveToKeyboard()
             } else {
                 setStatus("Loaded “\(entry.name)” — connect the pad to apply it")
             }
@@ -416,6 +479,50 @@ final class AppModel: ObservableObject {
             setStatus("Deleted “\(entry.name)”")
         } catch {
             setStatus("Could not delete: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    // MARK: - Presets
+
+    /// Writes the current profile to a file the user picks, so it can be moved
+    /// between Macs or shared.
+    func exportPreset() {
+        commit()
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(activeProfileName ?? "MacroPad preset").json"
+        panel.title = "Export preset"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            var p = profile
+            p.layoutName = layout.name
+            p.name = activeProfileName ?? p.name
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(p).write(to: url, options: .atomic)
+            setStatus("Exported to \(url.lastPathComponent)")
+        } catch {
+            setStatus("Export failed: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    /// Loads a preset file into the editor. It is not written to the keypad
+    /// until the user saves, so an imported preset can be reviewed first.
+    func importPreset() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.title = "Import preset"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let p = try JSONDecoder().decode(Profile.self, from: Data(contentsOf: url))
+            profile = p
+            activeProfileName = nil
+            if let match = LayoutLibrary.all.first(where: { $0.name == p.layoutName }) { layout = match }
+            loadEditor()
+            setStatus("Imported \(url.lastPathComponent) — review it, then Save to keypad")
+        } catch {
+            setStatus("Import failed: \(error.localizedDescription)", error: true)
         }
     }
 

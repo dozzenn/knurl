@@ -346,3 +346,51 @@ struct EmptyStateView: View {
         .padding(.vertical, 22)
     }
 }
+
+// MARK: - Top-bar cards
+
+/// A pressable container for the two things the user identifies the session by:
+/// which keypad is connected and which profile is loaded. Bigger and heavier
+/// than a menu button because these answer questions at a glance, not on click.
+struct Pill<Content: View>: View {
+    var active = false
+    @ViewBuilder let content: Content
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    init(active: Bool = false, @ViewBuilder content: () -> Content, action: @escaping () -> Void) {
+        self.active = active
+        self.content = content()
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            content
+                .padding(.horizontal, 11)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(active ? Theme.fillStrong : (hovering ? Theme.rowHover : Theme.fill))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(active ? Color.white.opacity(0.18) : Theme.hairline, lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(PressableStyle(scale: 0.985))
+        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+    }
+}
+
+/// Popovers get their own opaque ground: the window is already one translucent
+/// layer, and stacking a second one washes the text out.
+struct PopoverBackground: View {
+    var body: some View {
+        Color(nsColor: NSColor(calibratedWhite: 0.11, alpha: 1))
+            .overlay(Color.white.opacity(0.03))
+            .ignoresSafeArea()
+    }
+}

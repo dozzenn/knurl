@@ -28,7 +28,6 @@ struct ContentView: View {
             Hairline()
             BottomBar(showLog: $showLog)
         }
-        .background(Color.clear)
     }
 }
 
@@ -38,10 +37,9 @@ private struct TopBar: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        HStack(spacing: 10) {
-            DeviceMenu()
-            Rectangle().fill(Theme.hairline).frame(width: 1, height: 18)
-            ProfileMenu()
+        HStack(spacing: 8) {
+            DeviceCard()
+            ProfileCard()
 
             Spacer(minLength: 12)
 
@@ -54,127 +52,229 @@ private struct TopBar: View {
         }
         .padding(.leading, Theme.trafficLightInset)
         .padding(.trailing, Theme.gutter)
-        .frame(height: Theme.barHeight)
+        .frame(height: 58)
     }
 }
 
-/// Device status and picker in one control — the dot answers "is it plugged
-/// in", the menu answers everything else, so the common question costs no click.
-private struct DeviceMenu: View {
+/// The keypad, named and described. The dot answers "is it plugged in" without
+/// a click; the second line says what the app thinks it is talking to.
+private struct DeviceCard: View {
     @EnvironmentObject private var model: AppModel
-    @State private var hovering = false
-
-    private var label: String {
-        if let c = model.selectedCandidate, !c.product.isEmpty { return c.product }
-        return model.candidates.isEmpty ? "No pad found" : "Select device"
-    }
+    @State private var showing = false
 
     var body: some View {
-        Menu {
-            if model.visibleCandidates.isEmpty {
-                Text("No macro pad detected")
-            }
-            ForEach(model.visibleCandidates) { candidate in
-                Button {
-                    model.selectedCandidateID = candidate.id
-                    model.connect()
-                } label: {
-                    Text(candidate.id == model.selectedCandidateID
-                         ? "✓ \(candidate.displayName)" : candidate.displayName)
-                }
-            }
-            Divider()
-            if let c = model.selectedCandidate {
-                Text(c.detail)
-                Text("Protocol: \(model.activeProtocol.displayName) · report id \(model.reportId)")
-            }
-            Divider()
-            Toggle("Show all HID interfaces", isOn: $model.showAllInterfaces)
-            Button("Refresh") { model.refreshDevices() }
-            Button(model.isConnected ? "Disconnect" : "Connect") {
-                model.isConnected ? model.disconnect() : model.connect()
-            }
-        } label: {
-            HStack(spacing: 7) {
+        Pill(active: showing) {
+            HStack(spacing: 9) {
                 StatusDot(color: model.isConnected ? Theme.online : Theme.textFaint)
-                Text(label)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(model.deviceLabel)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    Text(model.deviceDetail)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textFaint)
+                        .lineLimit(1)
+                }
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Theme.textFaint)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 26)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(hovering ? Theme.rowHover : .clear)
-            )
+        } action: {
+            showing.toggle()
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+        .popover(isPresented: $showing, arrowEdge: Edge.bottom) {
+            DevicePopover()
+                .environmentObject(model)
+        }
     }
 }
 
-private struct ProfileMenu: View {
+private struct DevicePopover: View {
     @EnvironmentObject private var model: AppModel
-    @State private var hovering = false
+    @State private var draftNickname = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel(text: "Keypads")
+
+            if model.visibleCandidates.isEmpty {
+                EmptyStateView(icon: "cable.connector.slash",
+                               title: "No keypad found",
+                               message: "Plug one in — it should appear here within a second.")
+            }
+
+            ForEach(model.visibleCandidates) { candidate in
+                Row(title: model.displayName(for: candidate),
+                    subtitle: candidate.detail,
+                    icon: "keyboard",
+                    selected: candidate.id == model.selectedCandidateID,
+                    action: {
+                        model.selectedCandidateID = candidate.id
+                        model.connect()
+                        draftNickname = model.nickname(for: candidate) ?? ""
+                    }) {
+                    if candidate.id == model.selectedCandidateID {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                }
+            }
+
+            if let candidate = model.selectedCandidate {
+                Divider().background(Theme.hairline).padding(.vertical, 8)
+                SectionLabel(text: "Nickname")
+                HStack(spacing: 7) {
+                    TextField(candidate.product.isEmpty ? "My keypad" : candidate.product,
+                              text: $draftNickname)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.text)
+                        .padding(.horizontal, 8)
+                        .frame(height: 26)
+                        .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.fill))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Theme.hairline))
+                        .onSubmit { model.setNickname(draftNickname, for: candidate) }
+                    BarAction(title: "Save", prominent: true) {
+                        model.setNickname(draftNickname, for: candidate)
+                    }
+                }
+                .padding(.horizontal, 9)
+                Text("Only changes what this app calls it.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textFaint)
+                    .padding(.horizontal, 9)
+                    .padding(.top, 5)
+            }
+
+            Divider().background(Theme.hairline).padding(.vertical, 8)
+
+            Toggle("Show every HID interface", isOn: $model.showAllInterfaces)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 12))
+                .padding(.horizontal, 9)
+
+            HStack(spacing: 6) {
+                BarAction(title: "Refresh") { model.refreshDevices() }
+                BarAction(title: model.isConnected ? "Disconnect" : "Connect") {
+                    model.isConnected ? model.disconnect() : model.connect()
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 5)
+            .padding(.top, 6)
+        }
+        .padding(.vertical, 8)
+        .frame(width: 340)
+        .background(PopoverBackground())
+        .onAppear {
+            draftNickname = model.selectedCandidate.flatMap { model.nickname(for: $0) } ?? ""
+        }
+    }
+}
+
+/// Profiles are whole sets of mappings. Switching one writes it to the keypad,
+/// so the card says which set is currently loaded.
+private struct ProfileCard: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var showing = false
+
+    var body: some View {
+        Pill(active: showing) {
+            HStack(spacing: 9) {
+                Image(systemName: "square.stack.3d.up.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(model.activeProfileName == nil ? Theme.textFaint : Theme.accent)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(model.activeProfileName ?? "Unsaved changes")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(model.activeProfileName == nil ? Theme.textMuted : Theme.text)
+                        .lineLimit(1)
+                    Text(mappedSummary)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textFaint)
+                        .lineLimit(1)
+                }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Theme.textFaint)
+            }
+        } action: {
+            showing.toggle()
+        }
+        .popover(isPresented: $showing, arrowEdge: Edge.bottom) {
+            ProfilePopover()
+                .environmentObject(model)
+        }
+    }
+
+    private var mappedSummary: String {
+        let n = model.profile.configured(layerCount: model.layout.layerCount).count
+        return n == 0 ? "Nothing mapped yet" : (n == 1 ? "1 key mapped" : "\(n) keys mapped")
+    }
+}
+
+private struct ProfilePopover: View {
+    @EnvironmentObject private var model: AppModel
     @State private var showSaveSheet = false
     @State private var newName = ""
 
     var body: some View {
-        Menu {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel(text: "Saved profiles")
+
             if model.profiles.isEmpty {
-                Text("No saved profiles")
+                EmptyStateView(icon: "square.stack.3d.up.slash",
+                               title: "No profiles yet",
+                               message: "Save the current mappings to switch between setups later.")
             }
+
             ForEach(model.profiles) { entry in
-                Button {
-                    model.switchTo(entry)
-                } label: {
-                    Text(entry.name == model.activeProfileName ? "✓ \(entry.name)" : entry.name)
+                Row(title: entry.name,
+                    subtitle: "loads onto the keypad",
+                    icon: "square.stack.3d.up",
+                    selected: entry.name == model.activeProfileName,
+                    action: { model.switchTo(entry) }) {
+                    if entry.name == model.activeProfileName {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                    }
                 }
             }
-            Divider()
-            Button("Save as…") {
-                newName = model.activeProfileName ?? model.profile.name
+
+            Divider().background(Theme.hairline).padding(.vertical, 8)
+            SectionLabel(text: "Manage")
+
+            Row(title: "Save current mappings as…", icon: "plus.circle") {
+                newName = model.activeProfileName ?? "New profile"
                 showSaveSheet = true
             }
             if let active = model.profiles.first(where: { $0.name == model.activeProfileName }) {
-                Button("Update “\(active.name)”") { model.saveProfile(named: active.name) }
-                Divider()
-                Button("Delete “\(active.name)”", role: .destructive) { model.deleteProfile(active) }
+                Row(title: "Update “\(active.name)”", icon: "arrow.triangle.2.circlepath") {
+                    model.saveProfile(named: active.name)
+                }
+                Row(title: "Delete “\(active.name)”", icon: "trash", iconTint: Theme.accent) {
+                    model.deleteProfile(active)
+                }
             }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.textMuted)
-                Text(model.activeProfileName ?? "Unsaved profile")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(model.activeProfileName == nil ? Theme.textMuted : Theme.text)
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(Theme.textFaint)
+
+            Divider().background(Theme.hairline).padding(.vertical, 8)
+            SectionLabel(text: "Presets")
+
+            Row(title: "Import preset…", subtitle: "from a file", icon: "square.and.arrow.down") {
+                model.importPreset()
             }
-            .padding(.horizontal, 8)
-            .frame(height: 26)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(hovering ? Theme.rowHover : .clear)
-            )
+            Row(title: "Export preset…", subtitle: "to a file", icon: "square.and.arrow.up") {
+                model.exportPreset()
+            }
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+        .padding(.vertical, 8)
+        .frame(width: 330)
+        .background(PopoverBackground())
         .sheet(isPresented: $showSaveSheet) {
-            SaveProfileSheet(name: $newName) { name in
-                model.saveProfile(named: name)
-            }
+            SaveProfileSheet(name: $newName) { model.saveProfile(named: $0) }
         }
     }
 }
@@ -186,10 +286,10 @@ private struct SaveProfileSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Save profile")
+            Text("Name this profile")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.text)
-            TextField("Name", text: $name)
+            TextField("For example: Photoshop", text: $name)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.text)
@@ -197,16 +297,16 @@ private struct SaveProfileSheet: View {
                 .frame(height: 30)
                 .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.fill))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius).strokeBorder(Theme.hairline))
-                .onSubmit { save() }
+                .onSubmit(save)
             HStack {
                 Spacer()
                 BarAction(title: "Cancel") { dismiss() }
-                BarAction(title: "Save", keys: ["⏎"], prominent: true) { save() }
+                BarAction(title: "Save", keys: ["⏎"], prominent: true, action: save)
             }
         }
         .padding(16)
-        .frame(width: 320)
-        .background(WindowBackground())
+        .frame(width: 330)
+        .background(PopoverBackground())
     }
 
     private func save() {
@@ -236,12 +336,10 @@ private struct BottomBar: View {
 
             Spacer(minLength: 12)
 
-            BarAction(title: "HID log", keys: [], prominent: showLog) {
-                showLog.toggle()
-            }
+            BarAction(title: "HID log", prominent: showLog) { showLog.toggle() }
             Rectangle().fill(Theme.hairline).frame(width: 1, height: 18)
-            BarAction(title: "Upload all", keys: ["⇧", "⌘", "U"]) { model.uploadAll() }
-            BarAction(title: "Upload", keys: ["⌘", "U"], prominent: true) { model.uploadSelected() }
+            BarAction(title: "Save this key", keys: ["⌥", "⌘", "S"]) { model.saveSelectedKey() }
+            BarAction(title: "Save to keypad", keys: ["⌘", "S"], prominent: true) { model.saveToKeyboard() }
         }
         .padding(.horizontal, Theme.gutter)
         .frame(height: Theme.barHeight)
@@ -274,7 +372,7 @@ private struct LogPane: View {
             if model.log.isEmpty {
                 EmptyStateView(icon: "waveform",
                                title: "Nothing sent yet",
-                               message: "Every frame written to the pad shows up here, byte for byte.")
+                               message: "Every frame written to the keypad shows up here, byte for byte.")
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
@@ -300,7 +398,6 @@ private struct LogPane: View {
                         .padding(.vertical, 6)
                     }
                     .onChange(of: model.log.count) { _ in
-                        // No animation: frames arrive in bursts during an upload.
                         if let last = model.log.last { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }

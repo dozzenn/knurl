@@ -27,10 +27,13 @@ struct MacroPadApp: App {
                     .keyboardShortcut("r", modifiers: [.command])
                 Button("Probe report ids") { model.probeReportIds() }
                 Divider()
-                Button("Upload selected control") { model.uploadSelected() }
-                    .keyboardShortcut("u", modifiers: [.command])
-                Button("Upload everything") { model.uploadAll() }
-                    .keyboardShortcut("u", modifiers: [.command, .shift])
+                Button("Save to keypad") { model.saveToKeyboard() }
+                    .keyboardShortcut("s", modifiers: [.command])
+                Button("Save this key only") { model.saveSelectedKey() }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                Divider()
+                Button("Import preset…") { model.importPreset() }
+                Button("Export preset…") { model.exportPreset() }
             }
         }
 

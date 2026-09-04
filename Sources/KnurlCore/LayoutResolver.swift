@@ -51,15 +51,18 @@ public enum LayoutResolver {
         let data = Unmanaged<CFData>.fromOpaque(rawData).takeUnretainedValue() as Data
 
         var map: [Character: Resolved] = [:]
-        for code in UInt16(0)...UInt16(127) {
-            guard let usage = HIDKeyboard.virtualKeyToUsage[code] else { continue }
-            for shifted in [false, true] {
-                guard let text = translate(code: code, shifted: shifted, layout: data),
+        // Unshifted keys are collected first, so a character that exists both
+        // shifted and plain is reached the plain way. This is not tidiness: a
+        // shifted resolution combined with the command key lands on system
+        // shortcuts — on a Turkish layout "+" is shift-4, and ⇧⌘4 is the
+        // screenshot crosshair, not zoom.
+        for shifted in [false, true] {
+            for code in UInt16(0)...UInt16(127) {
+                guard let usage = HIDKeyboard.virtualKeyToUsage[code],
+                      let text = translate(code: code, shifted: shifted, layout: data),
                       text.count == 1, let character = text.first,
-                      !character.isWhitespace else { continue }
-                if map[character] == nil {
-                    map[character] = Resolved(usage: usage, needsShift: shifted)
-                }
+                      !character.isWhitespace, map[character] == nil else { continue }
+                map[character] = Resolved(usage: usage, needsShift: shifted)
             }
         }
         return map

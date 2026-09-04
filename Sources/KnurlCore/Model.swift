@@ -328,6 +328,19 @@ public struct KeyStroke: Codable, Hashable, Identifiable, Sendable {
         if usage == 0 { return mods.isEmpty ? "—" : mods }
         return mods.isEmpty ? base : "\(mods)\(base)"
     }
+
+    // `id` exists so SwiftUI can tell two rows apart in a list. It says nothing
+    // about what the keystroke is, so it is kept out of equality: otherwise two
+    // identical strokes compare unequal and nothing that compares mappings —
+    // "is this preset the one loaded?" — can ever be true.
+    public static func == (a: KeyStroke, b: KeyStroke) -> Bool {
+        a.usage == b.usage && a.modifiers == b.modifiers
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(usage)
+        hasher.combine(modifiers)
+    }
 }
 
 /// What a single control does.

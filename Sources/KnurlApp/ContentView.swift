@@ -380,7 +380,6 @@ struct ScopeChip: View {
     let scope: MappingScope
 
     private var selected: Bool { model.currentScopeKey == scope.key }
-    private var isLive: Bool { model.liveScopeKey == scope.key && model.isConnected }
 
     var body: some View {
         Button { model.selectScope(scope.key) } label: {
@@ -397,7 +396,6 @@ struct ScopeChip: View {
                     .tracking(0.9)
                     .foregroundStyle(selected ? Theme.textOnWell : Theme.text)
                     .lineLimit(1)
-                Lamp(on: isLive, colour: Theme.lampGood, size: 6)
             }
             .padding(.horizontal, 10)
             .frame(height: 28)

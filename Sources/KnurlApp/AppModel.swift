@@ -806,6 +806,22 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Whether the keys on screen are exactly this set.
+    ///
+    /// Worked out by comparing the mappings rather than remembering the last
+    /// card that was clicked, so the marker cannot drift out of step with what
+    /// the scope actually holds — editing one key drops the match immediately.
+    func isActive(_ preset: Preset) -> Bool {
+        !profile.bindings.isEmpty && preset.profile.bindings == profile.bindings
+    }
+
+    func isActive(_ template: MacroTemplate) -> Bool {
+        guard !profile.bindings.isEmpty else { return false }
+        var candidate = Profile()
+        template.apply(to: &candidate, layout: layout, layer: layer)
+        return candidate.bindings == profile.bindings
+    }
+
     // MARK: - Templates
 
     /// Lays a template over the whole pad and, if a keypad is connected, writes

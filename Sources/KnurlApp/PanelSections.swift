@@ -324,6 +324,7 @@ struct PresetsSection: View {
                                         ? "\(preset.profile.bindings.count) keys saved" : preset.summary,
                                         icon: "bookmark.fill",
                                         tint: .identity(for: preset.name),
+                                        active: model.isActive(preset),
                                         lines: [],
                                         note: nil,
                                         onUse: { model.apply(preset) },
@@ -345,6 +346,7 @@ struct PresetsSection: View {
                                     summary: template.summary,
                                     icon: template.icon,
                                     tint: Color(hex: template.tint),
+                                    active: model.isActive(template),
                                     lines: lines(for: template),
                                     note: template.note,
                                     onUse: { model.apply(template) },
@@ -374,6 +376,7 @@ private struct SetCard: View {
     let summary: String
     let icon: String
     let tint: Color
+    let active: Bool
     let lines: [(String, String)]
     let note: String?
     let onUse: () -> Void
@@ -406,6 +409,7 @@ private struct SetCard: View {
                     .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
+                Lamp(on: active, colour: tint, size: 7)
                 Spacer(minLength: 0)
                 if let onDelete {
                     Button(action: onDelete) {
@@ -447,12 +451,25 @@ private struct SetCard: View {
             }
 
             Spacer(minLength: 10)
-            PanelButton(title: "Use this", prominent: true, action: onUse)
+            PanelButton(title: active ? "On this key set" : "Use this",
+                        prominent: !active, action: onUse)
                 .frame(maxWidth: .infinity)
+                .disabled(active)
+                .opacity(active ? 0.75 : 1)
         }
         .padding(11)
         .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-        .lifted(radius: Theme.radiusPanel, depth: 0.8)
+        // An applied set reads as pressed in, and carries its own colour on the
+        // edge, so a wall of cards says at a glance which one is loaded.
+        .lifted(radius: Theme.radiusPanel, pressed: active, depth: active ? 0.3 : 0.8)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radiusPanel, style: .continuous)
+                .strokeBorder(active ? tint : .clear, lineWidth: 2)
+        )
+        .shadow(color: active ? tint.opacity(0.35) : .clear, radius: 8)
+        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusPanel, style: .continuous))
+        .onTapGesture { if !active { onUse() } }
+        .animation(Theme.press, value: active)
     }
 }
 

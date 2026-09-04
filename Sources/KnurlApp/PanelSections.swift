@@ -167,8 +167,14 @@ struct EffectTile: View {
 
     private var band: [Color] {
         if let colour { return [colour, colour] }
-        return (0...6).map { Color(hue: Double($0) / 6, saturation: 0.85, brightness: 1) }
+        return Self.spectrum
     }
+
+    /// Tide runs the palette whatever colour is set, so it always previews as
+    /// one — a tile showing a single colour would be describing something the
+    /// keypad does not do.
+    private static let spectrum: [Color] =
+        (0...6).map { Color(hue: Double($0) / 6, saturation: 0.85, brightness: 1) }
 
     @ViewBuilder
     private var preview: some View {
@@ -182,7 +188,7 @@ struct EffectTile: View {
                         (i.isMultiple(of: 2) ? (colour ?? Color.indigo) : Theme.well)
                     }
                 }
-        case 4: LinearGradient(colors: band + band.reversed(),
+        case 4: LinearGradient(colors: Self.spectrum + Self.spectrum.reversed(),
                                startPoint: .leading, endPoint: .trailing)
         default: LinearGradient(colors: [Color(red: 0.32, green: 0.22, blue: 0.62),
                                          Color(red: 0.62, green: 0.26, blue: 0.72)],
@@ -323,7 +329,6 @@ struct PresetsSection: View {
             // Choosing a set and choosing where it goes are one decision, so
             // they belong on one screen.
             ScopeStrip()
-            if !model.currentScope.isGlobal { ScopeNotice() }
             Hairline()
             body(inScrollView: true)
         }

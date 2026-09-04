@@ -105,6 +105,12 @@ private struct Sidebar: View {
             }
 
             Spacer()
+
+            // Pinned to the bottom: switching the panel's material is something
+            // you reach for, not something you hunt through settings for.
+            AppearanceSwitch()
+                .padding(.horizontal, 2)
+                .padding(.bottom, 2)
         }
         .padding(.horizontal, 8)
         .padding(.bottom, 10)
@@ -192,6 +198,51 @@ private struct DevicePlate: View {
     }
 }
 
+/// Auto, light, dark — three lit buttons in a trough, like a mode selector.
+private struct AppearanceSwitch: View {
+    @EnvironmentObject private var model: AppModel
+
+    private let options: [(AppModel.Appearance, String, String)] = [
+        (.system, "circle.lefthalf.filled", "Follow the system"),
+        (.light, "sun.max.fill", "Light"),
+        (.dark, "moon.fill", "Dark"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(options, id: \.0) { option, icon, help in
+                let on = model.appearance == option
+                Button { model.appearance = option } label: {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(on ? Theme.textOnWell : Theme.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 24)
+                        .modifier(AppearanceSegment(on: on))
+                }
+                .buttonStyle(PressableStyle(scale: 0.96))
+                .help(help)
+            }
+        }
+        .padding(3)
+        .trough(radius: Theme.radiusSmall)
+    }
+}
+
+private struct AppearanceSegment: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Theme.well))
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Theme.outline, lineWidth: 1))
+        } else {
+            content.contentShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+    }
+}
+
 // MARK: - Header
 
 private struct SectionHeader: View {
@@ -223,6 +274,12 @@ private struct KeysSection: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
+        content
+            .onAppear { model.startLiveWatch() }
+            .onDisappear { model.stopLiveWatch() }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             ScopeStrip()
             Hairline()

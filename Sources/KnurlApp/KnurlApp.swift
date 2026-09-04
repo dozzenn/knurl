@@ -43,7 +43,8 @@ struct KnurlApp: App {
         MenuBarExtra {
             MenuBarPanel().environmentObject(model)
         } label: {
-            Image(systemName: "keyboard.fill")
+            // A template image so the mark follows the menu bar's own appearance.
+            Image(nsImage: Wordmark.menuBarImage())
         }
         .menuBarExtraStyle(.window)
     }

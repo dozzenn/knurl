@@ -93,6 +93,7 @@ private struct ControlView: View {
                     subtitle: model.binding(for: action).summary,
                     selected: model.selectedAction == action,
                     mapped: model.binding(for: action).isSet,
+                    struck: model.livePress == action,
                     size: CGSize(width: control.position.width * scale,
                                  height: control.position.height * scale))
                 .onTapGesture { model.selectedAction = action }
@@ -112,12 +113,14 @@ private struct KeyFace: View {
     let subtitle: String
     let selected: Bool
     let mapped: Bool
+    /// True for the moment the real key was pressed.
+    var struck = false
     let size: CGSize
 
     @State private var hovering = false
 
     private var faceColours: [Color] {
-        if selected { return [Theme.capSunkHigh, Theme.capSunkLow] }
+        if struck || selected { return [Theme.capSunkHigh, Theme.capSunkLow] }
         return mapped ? [Theme.capFaceHigh, Theme.capFaceLow]
                       : [Theme.capIdleHigh, Theme.capIdleLow]
     }
@@ -136,8 +139,8 @@ private struct KeyFace: View {
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
                         .strokeBorder(Theme.outline, lineWidth: 1)
                 )
-                .shadow(color: Theme.dropShadow, radius: selected ? 2 : 6,
-                        x: 1, y: selected ? 1 : 4)
+                .shadow(color: Theme.dropShadow, radius: (selected || struck) ? 2 : 6,
+                        x: 1, y: (selected || struck) ? 1 : 4)
 
             // Top face — sunk when the key is the one being edited.
             RoundedRectangle(cornerRadius: radius * 0.78, style: .continuous)
@@ -146,9 +149,9 @@ private struct KeyFace: View {
                     RoundedRectangle(cornerRadius: radius * 0.78, style: .continuous)
                         .strokeBorder(Color.black.opacity(selected ? 0.30 : 0.16), lineWidth: 1)
                 )
-                .padding(EdgeInsets(top: inset * 0.75, leading: inset,
-                                    bottom: inset * 1.5, trailing: inset))
-                .shadow(color: .black.opacity(selected ? 0.22 : 0), radius: 3, y: 1)
+                .padding(EdgeInsets(top: struck ? inset * 1.5 : inset * 0.75, leading: inset,
+                                    bottom: struck ? inset * 0.75 : inset * 1.5, trailing: inset))
+                .shadow(color: .black.opacity((selected || struck) ? 0.22 : 0), radius: 3, y: 1)
 
             VStack(spacing: max(2, size.height * 0.03)) {
                 Text(title)
@@ -174,6 +177,8 @@ private struct KeyFace: View {
         .frame(width: size.width, height: size.height)
         .scaleEffect(hovering && !selected ? 1.015 : 1)
         .animation(Theme.press, value: selected)
+        // Short and hard: a key that has been hit should snap, not glide.
+        .animation(.easeOut(duration: struck ? 0.045 : 0.13), value: struck)
         .animation(Theme.hover, value: hovering)
         .onHover { h in hovering = h }
         .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
@@ -189,6 +194,10 @@ private struct KnobFace: View {
     let size: CGSize
 
     @State private var hovering = false
+    /// Where the knob has been turned to. Each live turn adds a detent, so the
+    /// face keeps the position it was left in rather than springing back.
+    @State private var angle: Double = 0
+    @State private var pressed = false
 
     var body: some View {
         let d = min(size.width, size.height)
@@ -204,27 +213,33 @@ private struct KnobFace: View {
                 .frame(width: bodyD + d * 0.06, height: bodyD + d * 0.06)
                 .shadow(color: Theme.dropShadow, radius: selected ? 3 : 6, x: 1, y: selected ? 2 : 4)
 
-            // Turned metal face
-            Circle()
-                .fill(AngularGradient(colors: [
-                    Theme.turnedMetal(0.97), Theme.turnedMetal(0.80), Theme.turnedMetal(0.94),
-                    Theme.turnedMetal(0.76), Theme.turnedMetal(0.97), Theme.turnedMetal(0.82),
-                    Theme.turnedMetal(0.93), Theme.turnedMetal(0.78), Theme.turnedMetal(0.97),
-                ], center: .center))
-                .overlay(
-                    Circle().fill(
-                        LinearGradient(colors: [Theme.highlight.opacity(0.8), Color.clear],
-                                       startPoint: .topLeading, endPoint: .center))
-                )
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.30), lineWidth: 1))
-                .frame(width: bodyD, height: bodyD)
+            // Turned metal face and its pointer turn together.
+            ZStack {
+                Circle()
+                    .fill(AngularGradient(colors: [
+                        Theme.turnedMetal(0.97), Theme.turnedMetal(0.80), Theme.turnedMetal(0.94),
+                        Theme.turnedMetal(0.76), Theme.turnedMetal(0.97), Theme.turnedMetal(0.82),
+                        Theme.turnedMetal(0.93), Theme.turnedMetal(0.78), Theme.turnedMetal(0.97),
+                    ], center: .center))
+                    .overlay(Circle().strokeBorder(Color.black.opacity(0.30), lineWidth: 1))
+                    .frame(width: bodyD, height: bodyD)
 
-            // Pointer.
-            Circle()
-                .fill(mappedCount > 0 ? Theme.lampOn : Theme.lampOff)
-                .frame(width: d * 0.05, height: d * 0.05)
-                .shadow(color: mappedCount > 0 ? Theme.lampOn.opacity(0.8) : .clear, radius: 3)
-                .offset(y: -bodyD * 0.34)
+                Circle()
+                    .fill(mappedCount > 0 ? Theme.lampOn : Theme.lampOff)
+                    .frame(width: d * 0.05, height: d * 0.05)
+                    .shadow(color: mappedCount > 0 ? Theme.lampOn.opacity(0.8) : .clear, radius: 3)
+                    .offset(y: -bodyD * 0.34)
+            }
+            .rotationEffect(.degrees(angle))
+            // The light stays put while the knob turns under it.
+            .overlay(
+                Circle()
+                    .fill(LinearGradient(colors: [Theme.highlight.opacity(0.8), Color.clear],
+                                         startPoint: .topLeading, endPoint: .center))
+                    .frame(width: bodyD, height: bodyD)
+                    .allowsHitTesting(false)
+            )
+            .scaleEffect(pressed ? 0.94 : 1)
 
             // Three marks on the bezel saying which of its actions are set.
             // They are engraved, not pressable — the knob is one target.
@@ -254,6 +269,32 @@ private struct KnobFace: View {
             // Keep whichever of this knob's actions was already being edited.
             if !selected { model.selectedAction = InputAction.knob(index, .push) }
         }
+        .onChange(of: model.livePress) { live in
+            guard let live, let knob = knobIndex(of: live), knob == index else { return }
+            switch part(of: live) {
+            case .left:
+                withAnimation(.easeOut(duration: 0.16)) { angle -= 24 }
+            case .right:
+                withAnimation(.easeOut(duration: 0.16)) { angle += 24 }
+            case .push:
+                withAnimation(.easeOut(duration: 0.05)) { pressed = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    withAnimation(.easeOut(duration: 0.12)) { pressed = false }
+                }
+            case nil:
+                break
+            }
+        }
+    }
+
+    private func knobIndex(of action: InputAction) -> Int? {
+        guard action.rawValue >= 23 else { return nil }
+        return (Int(action.rawValue) - 23) / 3 + 1
+    }
+
+    private func part(of action: InputAction) -> KnobPart? {
+        guard action.rawValue >= 23 else { return nil }
+        return KnobPart(rawValue: (Int(action.rawValue) - 23) % 3)
     }
 
     private var selected: Bool {

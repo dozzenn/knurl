@@ -65,6 +65,7 @@ struct MenuBarPanel: View {
         .padding(.vertical, 8)
         .frame(width: 320)
         .background(PopoverBackground())
+        .preferredColorScheme(model.colorScheme)
     }
 
     /// Sized from the rows actually present, capped so the panel cannot grow
@@ -158,13 +159,15 @@ private struct SetRow: View {
         .frame(height: 38)
         .background(
             RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                .fill(active ? Color.black.opacity(0.10)
-                      : (hovering ? Color.black.opacity(0.05) : .clear))
+                .fill(active ? Theme.rowSelected : (hovering ? Theme.rowHover : .clear))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .strokeBorder(hovering && !active ? Theme.outline.opacity(0.3) : .clear,
+                                      lineWidth: 1)
+                )
         )
         .contentShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-        .onContinuousHover { phase in
-            let inside: Bool
-            if case .active = phase { inside = true } else { inside = false }
+        .trackingHover { inside in
             guard inside != hovering else { return }
             withAnimation(Theme.hover) { hovering = inside }
         }

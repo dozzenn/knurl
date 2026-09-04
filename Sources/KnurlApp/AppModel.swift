@@ -395,6 +395,61 @@ final class AppModel: ObservableObject {
         profile[layer, action]
     }
 
+    // MARK: - Watching the keypad live
+
+    /// The control the keypad just fired, so the drawing of it can react.
+    ///
+    /// This works without any permission because it watches the app's own key
+    /// events: while the window is focused, a press on the pad arrives here the
+    /// same way any keystroke does. It follows that it only works while Knurl
+    /// is in front — and that a knob mapped to volume will not show, because
+    /// the system takes media keys before an app sees them.
+    @Published private(set) var livePress: InputAction?
+
+    private var liveMonitor: Any?
+    private var liveClearWork: DispatchWorkItem?
+
+    func startLiveWatch() {
+        guard liveMonitor == nil else { return }
+        liveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            guard let self, !self.isRecording else { return event }
+            let usage = HIDKeyboard.virtualKeyToUsage[event.keyCode]
+            let mods = HIDKeyboard.modifiers(from: event.modifierFlags.rawValue)
+            if let usage, let action = self.action(matchingUsage: usage, modifiers: mods) {
+                self.flash(action)
+                return nil   // it was the pad talking to us, not a shortcut
+            }
+            return event
+        }
+    }
+
+    func stopLiveWatch() {
+        if let liveMonitor { NSEvent.removeMonitor(liveMonitor) }
+        liveMonitor = nil
+        livePress = nil
+    }
+
+    private func flash(_ action: InputAction) {
+        livePress = action
+        liveClearWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.livePress = nil }
+        liveClearWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: work)
+    }
+
+    private func action(matchingUsage usage: UInt8, modifiers: Modifier) -> InputAction? {
+        for control in layout.controls {
+            for action in control.actions {
+                if case .keys(let sequence, _) = profile[layer, action],
+                   let first = sequence.first,
+                   first.usage == usage, first.modifiers == modifiers {
+                    return action
+                }
+            }
+        }
+        return nil
+    }
+
     // MARK: - Recording
 
     private func startRecording() {
@@ -627,10 +682,19 @@ final class AppModel: ObservableObject {
     }
 
     @Published var appearance: Appearance =
-        Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system {
+        Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "dark") ?? .dark {
         didSet {
             UserDefaults.standard.set(appearance.rawValue, forKey: "appearance")
             applyAppearance()
+        }
+    }
+
+    /// What a view should force, or nil to follow the system.
+    var colorScheme: ColorScheme? {
+        switch appearance {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 

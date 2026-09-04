@@ -33,6 +33,9 @@ enum Theme {
 
     static let outline    = dynamic(light: (0, 0, 0, 0.82), dark: (0, 0, 0, 0.78))
     static let outlineSoft = dynamic(light: (0, 0, 0, 0.28), dark: (1, 1, 1, 0.14))
+    /// Row feedback, strong enough to see on both materials.
+    static let rowHover    = dynamic(light: (0, 0, 0, 0.10), dark: (1, 1, 1, 0.10))
+    static let rowSelected = dynamic(light: (0, 0, 0, 0.17), dark: (1, 1, 1, 0.17))
     static let highlight  = dynamic(light: (1, 1, 1, 0.92), dark: (1, 1, 1, 0.13))
     static let dropShadow = dynamic(light: (0, 0, 0, 0.28), dark: (0, 0, 0, 0.55))
 
@@ -547,14 +550,15 @@ struct Row<Trailing: View>: View {
         .frame(height: Theme.rowHeight)
         .background(
             RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                .fill(selected ? Color.black.opacity(0.10) : (hovering ? Color.black.opacity(0.05) : .clear))
+                .fill(selected ? Theme.rowSelected : (hovering ? Theme.rowHover : .clear))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .strokeBorder(hovering && !selected ? Theme.outline.opacity(0.25) : .clear,
+                                      lineWidth: 1)
+                )
         )
         .contentShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-        // `onHover` does not fire reliably inside a menu bar panel; the
-        // continuous variant tracks through it.
-        .onContinuousHover { phase in
-            let inside: Bool
-            if case .active = phase { inside = true } else { inside = false }
+        .trackingHover { inside in
             guard inside != hovering else { return }
             withAnimation(Theme.hover) { hovering = inside }
         }

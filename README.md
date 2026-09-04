@@ -25,7 +25,8 @@ No installer, no drivers, no `hidapi`. Just `Knurl.app`.
   * a **mouse action** (clicks, scroll) with held modifiers
 * Multi-layer support on devices that have layers
 * Backlight: effect, speed and colour, read from the keypad and written back live
-* Light and dark
+* Light and dark, switched from the bottom of the sidebar
+* The pad reacts on screen as you press it, while the window is focused
 * Per-control upload, or upload the whole profile at once
 * Profiles saved as JSON
 * A live HID log showing the exact bytes on the wire

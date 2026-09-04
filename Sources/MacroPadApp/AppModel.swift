@@ -173,6 +173,7 @@ final class AppModel: ObservableObject {
         scopes = scopeStore.scopes
         profile = scopeStore.profile(for: currentScopeKey)
         if autoSwitchEnabled { startWatchingApps() }
+        refreshPresets()
         loadCounts()
         if statsEnabled { startCounting() }
         transport.startMonitoring()
@@ -552,6 +553,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var backlightIsLive = false
 
     func applyBacklight() {
+        let steps = backlight.speedSteps
+        backlight.speed = min(max(backlight.speed, steps.lowerBound), steps.upperBound)
         guard let webhub = composer as? WebHubComposer else {
             setStatus("Backlight is not supported on this device", error: true)
             return
@@ -797,6 +800,50 @@ final class AppModel: ObservableObject {
         let wanted = target == currentScopeKey ? profile : scopeStore.profile(for: target)
         writeToDevice(wanted, describing: scopes.first { $0.key == target }?.name ?? "Global")
         liveScopeKey = target
+    }
+
+    // MARK: - Presets you saved
+
+    private let presetStore = PresetStore()
+    @Published private(set) var presets: [Preset] = []
+
+    func refreshPresets() { presets = presetStore.all() }
+
+    func savePreset(named name: String, summary: String) {
+        commit()
+        var p = profile
+        p.layoutName = layout.name
+        p.name = name
+        do {
+            try presetStore.save(Preset(name: name, summary: summary, profile: p))
+            refreshPresets()
+            setStatus("Saved “\(name)” as a preset")
+        } catch {
+            setStatus("Could not save the preset: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    func deletePreset(_ preset: Preset) {
+        try? presetStore.delete(preset)
+        refreshPresets()
+    }
+
+    /// Drops a saved preset onto the scope on screen, and writes it.
+    func apply(_ preset: Preset) {
+        isRecording = false
+        var next = preset.profile
+        next.layoutName = layout.name
+        next.ledMode = profile.ledMode
+        next.ledColor = profile.ledColor
+        profile = next
+        loadedFromDevice = false
+        persistCurrentScope()
+        loadEditor()
+        if isConnected {
+            saveToKeyboard()
+        } else {
+            setStatus("Loaded “\(preset.name)” — connect the keypad to write it")
+        }
     }
 
     // MARK: - Templates

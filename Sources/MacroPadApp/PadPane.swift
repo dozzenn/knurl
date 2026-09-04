@@ -159,14 +159,7 @@ private struct ButtonFace: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .background(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(Color.black.opacity(0.22))
-                .overlay(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(hovering ? Theme.rowHover : Theme.fill)
-                )
-        )
+        .raised(radius: radius, depth: hovering ? 1.15 : 0.95, pressed: false)
         .overlay(alignment: .bottom) {
             if mapped {
                 RoundedRectangle(cornerRadius: 1, style: .continuous)
@@ -177,9 +170,9 @@ private struct ButtonFace: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(selected ? Theme.accent : Theme.hairline,
-                              lineWidth: selected ? 1.5 : 1)
+                .strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1.6)
         )
+        .activeGlow(Theme.accent, on: selected, radius: 9)
         .overlay(alignment: .topTrailing) {
             if let presses, presses > 0 {
                 DotMatrixNumber(text: "\(presses)",
@@ -189,15 +182,6 @@ private struct ButtonFace: View {
                     .padding(max(4, size.height * 0.07))
             }
         }
-        .overlay(alignment: .top) {
-            // Bright top edge — the material catching light from above.
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .trim(from: 0.62, to: 0.88)
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                .frame(width: size.width, height: size.height)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
         .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .onHover { h in withAnimation(Theme.hover) { hovering = h } }
     }
@@ -214,10 +198,15 @@ private struct KnobFace: View {
         let d = min(size.width, size.height)
         ZStack {
             Circle()
-                .fill(Color.black.opacity(0.22))
-                .overlay(Circle().fill(Theme.fill))
-                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
-                .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
+                .fill(Theme.groundLift)
+                .overlay(
+                    Circle().strokeBorder(
+                        LinearGradient(colors: [Color.white.opacity(0.18), Color.white.opacity(0.02)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1)
+                )
+                .shadow(color: Theme.lightEdge, radius: 6, x: -3, y: -3)
+                .shadow(color: Theme.darkEdge, radius: 10, x: 5, y: 5)
 
             ForEach(KnobPart.allCases, id: \.self) { part in
                 KnobSegment(index: index, part: part, diameter: d)
@@ -259,12 +248,11 @@ private struct KnobSegment: View {
             .foregroundStyle(mapped ? Theme.text : Theme.textFaint)
             .frame(width: diameter * 0.32, height: diameter * 0.32)
             .background(
-                Circle().fill(selected ? Theme.accent.opacity(0.30)
+                Circle().fill(selected ? Theme.accent.opacity(0.32)
                               : (hovering ? Theme.rowHover : (mapped ? Theme.fillStrong : .clear)))
             )
-            .overlay(
-                Circle().strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1.5)
-            )
+            .overlay(Circle().strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1.5))
+            .activeGlow(Theme.accent, on: selected, radius: 6)
             .contentShape(Circle())
             .onTapGesture { model.selectedAction = action }
             .onHover { h in withAnimation(Theme.hover) { hovering = h } }

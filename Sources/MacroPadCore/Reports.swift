@@ -407,6 +407,22 @@ public struct BacklightState: Equatable, Sendable {
     // firmware does something arbitrary with it rather than clamping.
     public static let maxBrightness: UInt8 = 4
     public static let maxSpeed: UInt8 = 4
+
+    /// The speed values that actually behave for the current effect.
+    ///
+    /// Most effects step evenly across 0…4. Tide does not: on this firmware 3
+    /// jumps to a speed far beyond 2 and 4 drops back below it, so the scale is
+    /// not monotonic and a four-step slider would be lying about what it does.
+    /// Only the range that is ordered is offered.
+    public var speedSteps: ClosedRange<UInt8> {
+        mode == 4 ? 0...2 : 0...Self.maxSpeed
+    }
+
+    public var speedNote: String? {
+        mode == 4
+            ? "Tide only steps evenly up to 2 on this firmware — above that the speed jumps around instead of increasing."
+            : nil
+    }
 }
 
 public extension WebHubComposer {

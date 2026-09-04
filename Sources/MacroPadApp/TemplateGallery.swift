@@ -8,11 +8,16 @@ struct TemplateGallery: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var category: String? = nil
+    @State private var showSaveSheet = false
+    @State private var newName = ""
 
     private var shown: [MacroTemplate] {
         guard let category else { return TemplateLibrary.all }
         return TemplateLibrary.all.filter { $0.category == category }
     }
+
+    private var showBuiltIn: Bool { category != "Yours" }
+    private var showMine: Bool { category == nil || category == "Yours" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,11 +25,51 @@ struct TemplateGallery: View {
             Hairline()
 
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 236), spacing: 12)], spacing: 12) {
-                    ForEach(shown) { template in
-                        TemplateCard(template: template) {
-                            model.apply(template)
-                            dismiss()
+                VStack(alignment: .leading, spacing: 16) {
+                    if showMine {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Your presets")
+                                    .font(Theme.sectionLabel).tracking(0.3)
+                                    .foregroundStyle(Theme.textFaint)
+                                Spacer()
+                                BarAction(title: "Save current keys…", prominent: true) {
+                                    newName = model.currentScope.name
+                                    showSaveSheet = true
+                                }
+                            }
+                            if model.presets.isEmpty {
+                                Text("Nothing saved yet. “Save current keys…” keeps whatever is on screen so you can drop it onto any app later.")
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Theme.textFaint)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 236), spacing: 12)],
+                                          spacing: 12) {
+                                    ForEach(model.presets) { preset in
+                                        PresetCard(preset: preset,
+                                                   onApply: { model.apply(preset); dismiss() },
+                                                   onDelete: { model.deletePreset(preset) })
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if showBuiltIn {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Built in")
+                                .font(Theme.sectionLabel).tracking(0.3)
+                                .foregroundStyle(Theme.textFaint)
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 236), spacing: 12)],
+                                      spacing: 12) {
+                                ForEach(shown) { template in
+                                    TemplateCard(template: template) {
+                                        model.apply(template)
+                                        dismiss()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -34,20 +79,25 @@ struct TemplateGallery: View {
             Hairline()
             footer
         }
-        .frame(width: 780, height: 560)
+        .frame(width: 800, height: 580)
         .background(PopoverBackground())
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showSaveSheet) {
+            SavePresetSheet(name: $newName) { name, summary in
+                model.savePreset(named: name, summary: summary)
+            }
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Start from a template")
+                    Text("Presets")
                         .font(.system(size: 20, weight: .semibold))
                         .tracking(-0.4)
                         .foregroundStyle(Theme.text)
-                    Text("Fills every key and the knob at once. Change anything afterwards.")
+                    Text("A whole set of keys in one click, applied to \(model.currentScope.name). Change anything afterwards.")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textMuted)
                 }
@@ -64,6 +114,7 @@ struct TemplateGallery: View {
 
             HStack(spacing: 5) {
                 CategoryChip(title: "All", selected: category == nil) { category = nil }
+                CategoryChip(title: "Yours", selected: category == "Yours") { category = "Yours" }
                 ForEach(TemplateLibrary.categories, id: \.self) { name in
                     CategoryChip(title: name, selected: category == name) { category = name }
                 }
@@ -205,5 +256,112 @@ private struct SlotLine: View {
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
         }
+    }
+}
+
+
+/// One of the user's own saved sets.
+private struct PresetCard: View {
+    @EnvironmentObject private var model: AppModel
+    let preset: Preset
+    let onApply: () -> Void
+    let onDelete: () -> Void
+
+    @State private var hovering = false
+
+    private var mapped: Int { preset.profile.bindings.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 30, height: 30)
+                    .raised(radius: 8, depth: 0.4)
+                Spacer()
+                if hovering {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textFaint)
+                    }
+                    .buttonStyle(PressableStyle())
+                    .help("Delete this preset")
+                }
+            }
+            .padding(.bottom, 11)
+
+            Text(preset.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.text)
+            Text(preset.summary.isEmpty
+                 ? "\(mapped) key\(mapped == 1 ? "" : "s") saved"
+                 : preset.summary)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+
+            Spacer(minLength: 12)
+
+            Button(action: onApply) {
+                Text("Use this")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 30)
+                    .raised(radius: Theme.radius, depth: 0.5)
+            }
+            .buttonStyle(PressableStyle())
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
+        .raised(radius: 12, depth: hovering ? 0.9 : 0.7)
+        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
+    }
+}
+
+private struct SavePresetSheet: View {
+    @Binding var name: String
+    let onSave: (String, String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var summary = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Text("Save these keys as a preset")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.text)
+            TextField("Name", text: $name)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .recessed(radius: Theme.radius)
+            TextField("What is it for? (optional)", text: $summary)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.text)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .recessed(radius: Theme.radius)
+            HStack {
+                Spacer()
+                BarAction(title: "Cancel") { dismiss() }
+                BarAction(title: "Save", keys: ["⏎"], prominent: true, action: save)
+            }
+        }
+        .padding(16)
+        .frame(width: 360)
+        .background(PopoverBackground())
+    }
+
+    private func save() {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onSave(trimmed, summary.trimmingCharacters(in: .whitespacesAndNewlines))
+        dismiss()
     }
 }

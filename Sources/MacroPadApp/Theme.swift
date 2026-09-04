@@ -8,47 +8,50 @@ import SwiftUI
 
 enum Theme {
 
-    // MARK: Colour
+    // MARK: Ground
     //
-    // Everything is white at a given opacity so the single translucent surface
-    // underneath stays visible through the whole hierarchy. Stacking a second
-    // translucent layer would wash the text out, so nested surfaces are opaque
-    // tints instead.
+    // A neutral mid grey, not black. Depth here comes from a light from the
+    // top-left and a shadow to the bottom-right, and neither is visible on a
+    // surface that is already at one end of the range — the ground has to sit
+    // in the middle for a control to look raised out of it or pressed into it.
 
-    static let text        = Color.white.opacity(0.93)
-    static let textMuted   = Color.white.opacity(0.56)
-    static let textFaint   = Color.white.opacity(0.34)
+    static let ground      = Color(red: 0.216, green: 0.216, blue: 0.224)
+    static let groundDeep  = Color(red: 0.165, green: 0.165, blue: 0.173)
+    static let groundLift  = Color(red: 0.251, green: 0.251, blue: 0.259)
 
-    static let hairline    = Color.white.opacity(0.075)
-    static let rowHover    = Color.white.opacity(0.055)
-    static let rowSelected = Color.white.opacity(0.10)
-    static let fill        = Color.white.opacity(0.07)
-    static let fillStrong  = Color.white.opacity(0.12)
+    /// The two lights that define every surface.
+    static let lightEdge   = Color.white.opacity(0.11)
+    static let darkEdge    = Color.black.opacity(0.42)
 
-    static let accent      = Color(red: 1.00, green: 0.39, blue: 0.39)   // signal red
-    static let online      = Color(red: 0.20, green: 0.84, blue: 0.29)
-    static let warning     = Color(red: 1.00, green: 0.72, blue: 0.30)
+    // MARK: Colour
 
-    /// Sits behind the blurred material so the window keeps its weight over a
-    /// bright desktop.
-    static let scrim       = Color.black.opacity(0.34)
+    static let text        = Color.white.opacity(0.92)
+    static let textMuted   = Color.white.opacity(0.58)
+    static let textFaint   = Color.white.opacity(0.36)
+
+    static let hairline    = Color.white.opacity(0.07)
+    static let rowHover    = Color.white.opacity(0.05)
+    static let rowSelected = Color.white.opacity(0.09)
+    static let fill        = Color.white.opacity(0.06)
+    static let fillStrong  = Color.white.opacity(0.11)
+
+    static let accent      = Color(red: 1.00, green: 0.42, blue: 0.38)
+    static let online      = Color(red: 0.40, green: 0.86, blue: 0.45)
+    static let warning     = Color(red: 1.00, green: 0.76, blue: 0.28)
+
+    static let scrim       = Color.black.opacity(0.0)
 
     // MARK: Metrics
 
     static let windowRadius: CGFloat = 12
-    static let radius: CGFloat = 7
-    static let radiusSmall: CGFloat = 5
+    static let radius: CGFloat = 9
+    static let radiusSmall: CGFloat = 6
     static let rowHeight: CGFloat = 34
     static let barHeight: CGFloat = 44
-    static let gutter: CGFloat = 12
-    /// Room for the traffic lights when the title bar is hidden.
+    static let gutter: CGFloat = 14
     static let trafficLightInset: CGFloat = 76
 
     // MARK: Type
-    //
-    // Tracking is set per size rather than once globally: large text reads too
-    // loose without negative tracking, small caps text too tight without a
-    // positive nudge.
 
     static let rowTitle    = Font.system(size: 13, weight: .medium)
     static let rowSubtitle = Font.system(size: 11, weight: .regular)
@@ -59,9 +62,73 @@ enum Theme {
 
     // MARK: Motion
 
-    /// Pointer-driven feedback only. Keyboard actions stay instant.
     static let hover  = Animation.easeOut(duration: 0.12)
     static let press  = Animation.easeOut(duration: 0.13)
+}
+
+// MARK: - Soft machine surfaces
+
+/// A surface lifted out of the ground: highlight up-left, shadow down-right,
+/// and a bright inner edge where the light catches the top lip.
+struct Raised: ViewModifier {
+    var radius: CGFloat = Theme.radius
+    var depth: CGFloat = 1
+    var pressed = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(pressed ? Theme.groundDeep : Theme.groundLift)
+                    .shadow(color: pressed ? .clear : Theme.lightEdge,
+                            radius: 6 * depth, x: -3 * depth, y: -3 * depth)
+                    .shadow(color: pressed ? .clear : Theme.darkEdge,
+                            radius: 10 * depth, x: 5 * depth, y: 5 * depth)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(colors: pressed
+                                       ? [Color.black.opacity(0.30), Color.white.opacity(0.04)]
+                                       : [Color.white.opacity(0.16), Color.white.opacity(0.02)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1)
+            )
+    }
+}
+
+/// A well pressed into the ground — tracks, fields, and anything that holds
+/// something rather than does something.
+struct Recessed: ViewModifier {
+    var radius: CGFloat = Theme.radius
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(Theme.groundDeep)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(colors: [Color.black.opacity(0.45), Color.white.opacity(0.10)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    func raised(radius: CGFloat = Theme.radius, depth: CGFloat = 1, pressed: Bool = false) -> some View {
+        modifier(Raised(radius: radius, depth: depth, pressed: pressed))
+    }
+    func recessed(radius: CGFloat = Theme.radius) -> some View {
+        modifier(Recessed(radius: radius))
+    }
+    /// The warm halo an active control carries.
+    func activeGlow(_ colour: Color, on: Bool, radius: CGFloat = 7) -> some View {
+        shadow(color: on ? colour.opacity(0.55) : .clear, radius: radius)
+    }
 }
 
 // MARK: - Accessibility-aware translucency
@@ -83,9 +150,7 @@ struct WindowSurface: NSViewRepresentable {
 
 struct WindowBackground: View {
     var body: some View {
-        WindowSurface()
-            .overlay(Theme.scrim)
-            .ignoresSafeArea()
+        Theme.ground.ignoresSafeArea()
     }
 }
 
@@ -103,17 +168,10 @@ struct KeyCap: View {
         Text(text)
             .font(Theme.keycap)
             .foregroundStyle(emphasized ? Theme.text : Theme.textMuted)
-            .frame(minWidth: 18)
-            .frame(height: 18)
+            .frame(minWidth: 19)
+            .frame(height: 19)
             .padding(.horizontal, 4)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .fill(emphasized ? Theme.fillStrong : Theme.fill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .strokeBorder(Theme.hairline, lineWidth: 1)
-            )
+            .raised(radius: Theme.radiusSmall, depth: 0.4)
     }
 }
 
@@ -221,25 +279,28 @@ struct BarButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(prominent ? Theme.text : Theme.textMuted)
-            .padding(.horizontal, 9)
-            .frame(height: 26)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(configuration.isPressed ? Theme.fillStrong
-                          : (prominent ? Theme.fill : .clear))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .strokeBorder(prominent ? Theme.hairline : .clear, lineWidth: 1)
-            )
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .modifier(BarButtonSurface(prominent: prominent, pressed: configuration.isPressed))
             .contentShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(Theme.press, value: configuration.isPressed)
     }
 }
 
-/// A hoverable bar control that also carries a shortcut hint, the way Raycast
-/// labels its primary action.
+private struct BarButtonSurface: ViewModifier {
+    let prominent: Bool
+    let pressed: Bool
+
+    func body(content: Content) -> some View {
+        if prominent || pressed {
+            content.raised(radius: Theme.radius, depth: 0.55, pressed: pressed)
+        } else {
+            content
+        }
+    }
+}
+
+/// A hoverable bar control that also carries a shortcut hint.
 struct BarAction: View {
     let title: String
     var keys: [String] = []
@@ -282,25 +343,23 @@ struct Segmented<Value: Hashable>: View {
                         Text(item.label).font(.system(size: 12, weight: isOn ? .semibold : .medium))
                     }
                     .foregroundStyle(isOn ? Theme.text : Theme.textMuted)
-                    .padding(.horizontal, 10)
-                    .frame(height: 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                            .fill(isOn ? Theme.fillStrong : .clear)
-                    )
+                    .padding(.horizontal, 11)
+                    .frame(height: 25)
+                    .modifier(SegmentSurface(on: isOn))
                     .contentShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
                 }
                 .buttonStyle(PressableStyle(scale: 0.98))
             }
         }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.fill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 1)
-        )
+        .padding(3)
+        .recessed(radius: Theme.radius)
+    }
+}
+
+private struct SegmentSurface: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on { content.raised(radius: Theme.radiusSmall, depth: 0.45) } else { content }
     }
 }
 
@@ -368,17 +427,10 @@ struct Pill<Content: View>: View {
     var body: some View {
         Button(action: action) {
             content
-                .padding(.horizontal, 11)
-                .frame(height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(active ? Theme.fillStrong : (hovering ? Theme.rowHover : Theme.fill))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(active ? Color.white.opacity(0.18) : Theme.hairline, lineWidth: 1)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .padding(.horizontal, 12)
+                .frame(height: 42)
+                .raised(radius: 11, depth: hovering ? 0.9 : 0.7, pressed: active)
+                .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(PressableStyle(scale: 0.985))
         .onHover { h in withAnimation(Theme.hover) { hovering = h } }
@@ -389,9 +441,7 @@ struct Pill<Content: View>: View {
 /// layer, and stacking a second one washes the text out.
 struct PopoverBackground: View {
     var body: some View {
-        Color(nsColor: NSColor(calibratedWhite: 0.11, alpha: 1))
-            .overlay(Color.white.opacity(0.03))
-            .ignoresSafeArea()
+        Theme.ground.ignoresSafeArea()
     }
 }
 
@@ -425,21 +475,27 @@ struct GlassSlider: View {
                 let knob: CGFloat = dragging ? 20 : 17
 
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.black.opacity(0.28))
-                        .frame(height: 7)
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.07), lineWidth: 1))
+                    Capsule().fill(Color.clear)
+                        .frame(height: 8)
+                        .recessed(radius: 4)
 
                     Capsule()
-                        .fill(LinearGradient(colors: [tint.opacity(0.75), tint],
+                        .fill(LinearGradient(colors: [tint.opacity(0.7), tint],
                                              startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(7, w * fraction), height: 7)
+                        .frame(width: max(8, w * fraction), height: 8)
+                        .activeGlow(tint, on: dragging, radius: 5)
 
                     Circle()
-                        .fill(Color.white)
+                        .fill(Theme.groundLift)
                         .frame(width: knob, height: knob)
-                        .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.45), radius: dragging ? 5 : 3, y: 1)
+                        .overlay(
+                            Circle().strokeBorder(
+                                LinearGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0.05)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1)
+                        )
+                        .shadow(color: Theme.lightEdge, radius: 3, x: -2, y: -2)
+                        .shadow(color: Theme.darkEdge, radius: dragging ? 6 : 4, x: 2, y: 3)
                         .offset(x: (w - knob) * fraction)
                 }
                 .frame(height: 22)

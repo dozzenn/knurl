@@ -31,7 +31,7 @@ struct InspectorPane: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Color.black.opacity(0.12))
+        .background(Theme.groundDeep.opacity(0.55))
     }
 
     private var head: some View {
@@ -146,16 +146,12 @@ private struct RecordButton: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
             .frame(height: 36)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(model.isRecording ? Theme.accent.opacity(0.24)
-                          : (hovering ? Theme.fillStrong : Theme.fill))
-            )
+            .raised(radius: Theme.radius, depth: 0.7, pressed: model.isRecording)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .strokeBorder(model.isRecording ? Theme.accent.opacity(0.6) : Theme.hairline,
-                                  lineWidth: 1)
+                    .strokeBorder(model.isRecording ? Theme.accent.opacity(0.7) : .clear, lineWidth: 1.5)
             )
+            .activeGlow(Theme.accent, on: model.isRecording, radius: 8)
         }
         .buttonStyle(PressableStyle())
         .onHover { h in withAnimation(Theme.hover) { hovering = h } }
@@ -194,15 +190,12 @@ private struct SequenceStrip: View {
         }
         .frame(height: 52)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .fill(Color.black.opacity(0.22))
-        )
+        .recessed(radius: Theme.radius)
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .strokeBorder(model.isRecording ? Theme.accent.opacity(0.5) : Theme.hairline,
-                              lineWidth: 1)
+                .strokeBorder(model.isRecording ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5)
         )
+        .activeGlow(Theme.accent, on: model.isRecording, radius: 8)
     }
 }
 
@@ -301,13 +294,10 @@ struct ModifierRow: View {
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(on ? Theme.text : Theme.textFaint)
                         .frame(width: 26, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                                .fill(on ? Theme.accent.opacity(0.26) : Theme.fill)
-                        )
+                        .raised(radius: Theme.radiusSmall, depth: 0.45, pressed: on)
                         .overlay(
                             RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                                .strokeBorder(on ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+                                .strokeBorder(on ? Theme.accent.opacity(0.65) : .clear, lineWidth: 1.4)
                         )
                 }
                 .buttonStyle(PressableStyle())
@@ -465,15 +455,24 @@ private struct WebHubBacklightEditor: View {
 
         if !model.backlight.isOff {
             if model.backlight.usesSpeed {
+                let steps = model.backlight.speedSteps
                 LabeledSlider(title: "Speed",
                               readout: "\(model.backlight.speed)",
                               value: Binding(
-                                get: { Double(model.backlight.speed) },
+                                get: { Double(min(max(model.backlight.speed, steps.lowerBound), steps.upperBound)) },
                                 set: { model.backlight.speed = UInt8($0.rounded()) }
                               ),
-                              range: 0...Double(BacklightState.maxSpeed),
-                              ticks: Int(BacklightState.maxSpeed) + 1) {
+                              range: Double(steps.lowerBound)...Double(steps.upperBound),
+                              ticks: Int(steps.upperBound - steps.lowerBound) + 1) {
                     model.applyBacklight()
+                }
+                if let note = model.backlight.speedNote {
+                    Text(note)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textFaint)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 3)
+                        .padding(.top, 6)
                 }
             }
 

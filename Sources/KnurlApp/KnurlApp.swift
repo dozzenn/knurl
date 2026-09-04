@@ -6,13 +6,9 @@ struct KnurlApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarPanel().environmentObject(model)
-        } label: {
-            Image(systemName: "keyboard.fill")
-        }
-        .menuBarExtraStyle(.window)
-
+        // The window is declared first on purpose: SwiftUI treats the first
+        // scene as the primary one, and a menu bar item in that position leaves
+        // the app with nothing on screen at launch.
         Window("Knurl", id: "main") {
             ContentView()
                 .environmentObject(model)
@@ -23,10 +19,10 @@ struct KnurlApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
-            // Settings live in the window's own sidebar, so the app menu points
-            // there rather than opening a second window behind ⌘,.
+            // Settings are a section of the window's own sidebar, so the app
+            // menu points there rather than opening a second window.
             CommandGroup(replacing: .appSettings) {
-                Button("Settings are in the window sidebar") {
+                Button("Settings…") {
                     NSApp.activate(ignoringOtherApps: true)
                     NSApp.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
                 }
@@ -45,5 +41,12 @@ struct KnurlApp: App {
                     .keyboardShortcut("r", modifiers: [.command])
             }
         }
+
+        MenuBarExtra {
+            MenuBarPanel().environmentObject(model)
+        } label: {
+            Image(systemName: "keyboard.fill")
+        }
+        .menuBarExtraStyle(.window)
     }
 }

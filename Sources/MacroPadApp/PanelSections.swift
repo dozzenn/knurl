@@ -496,68 +496,6 @@ private struct SavePresetSheet: View {
     }
 }
 
-// MARK: - Stats
-
-struct StatsSection: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Panel(title: "Count presses") {
-                    HStack(spacing: 12) {
-                        Text("Watches this keypad's own interface and attributes each press to the key that produced it. Nothing else you type is seen.")
-                            .font(Theme.rowDetail)
-                            .foregroundStyle(Theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        PanelSwitch(isOn: $model.statsEnabled)
-                    }
-                }
-
-                if model.statsEnabled {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .bottom, spacing: 14) {
-                            DotMatrixNumber(text: "\(model.totalPresses)", dot: 6, gap: 3,
-                                            color: Theme.lampOn)
-                            PanelLabel(text: "total presses", colour: Theme.textOnWellMuted, size: 10)
-                                .padding(.bottom, 3)
-                            Spacer()
-                            PanelButton(title: "Reset", compact: true) { model.resetStats() }
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .well(radius: Theme.radiusPanel)
-
-                        Panel(title: "Per key") {
-                            VStack(spacing: 1) {
-                                ForEach(model.layout.controls) { control in
-                                    ForEach(control.actions, id: \.self) { action in
-                                        HStack(spacing: 10) {
-                                            Text(action.displayName)
-                                                .font(Theme.rowTitle)
-                                                .foregroundStyle(Theme.text)
-                                            Text(model.binding(for: action).summary)
-                                                .font(Theme.rowDetail)
-                                                .foregroundStyle(Theme.textFaint)
-                                                .lineLimit(1)
-                                            Spacer(minLength: 8)
-                                            Readout(text: "\(model.presses(for: action))")
-                                        }
-                                        .padding(.horizontal, 10)
-                                        .frame(height: 34)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(Theme.gutter)
-        }
-    }
-}
-
 // MARK: - General
 
 struct GeneralSection: View {

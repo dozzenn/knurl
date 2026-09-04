@@ -13,7 +13,6 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
 * Global keys plus per-app overrides — the keypad follows whichever app is in front
 
 * Lives in the menu bar, with one-click switching between key sets
-* Optional press counts, tallied per key from the keypad's own interface
 
 * Auto-detects the pad's vendor-defined HID configuration interface
 * Maps each button and each knob action (turn left / press / turn right) to:
@@ -22,6 +21,7 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
   * a **mouse action** (clicks, scroll) with held modifiers
 * Multi-layer support on devices that have layers
 * Backlight: effect, speed and colour, read from the keypad and written back live
+* Light and dark
 * Per-control upload, or upload the whole profile at once
 * Profiles saved as JSON
 * A live HID log showing the exact bytes on the wire
@@ -94,7 +94,7 @@ pad happens to be carrying.
 ## One window
 
 Everything lives in a single window with its sections down the left: Keys,
-Backlight, Apps, Presets, Stats, General and About. Settings are a section
+Backlight, Apps, Presets, General and About. Settings are a section
 there rather than a separate ⌘, window, so every switch the app has can be
 found by looking rather than by remembering a menu. The menu bar item is a
 shortcut to switching key sets, not the only route to anything.
@@ -104,13 +104,6 @@ a light from the top-left and a thin dark outline, dark wells for anything that
 holds data, monospaced labels in small caps, and indicator lamps that light up.
 Readouts and the wordmark are plotted as dot fields rather than typeset, because
 macOS ships no pixel face.
-
-## Press counts
-
-Counting is off by default. When on, the app opens the keypad's own keyboard
-interface and attributes each press back to the control that produced it by
-matching the report against the mappings currently loaded — it watches that one
-device, not everything you type. Counts appear as a small tally on each key.
 
 ## Protocol notes
 
@@ -155,7 +148,8 @@ Backlight is one read/write block: `06 0A` reads it, and
 `06 0B 0B 00 00 <type> 00 <mode> <brightness> <speed> <direction> <color> 00 <h> <s> <v>`
 writes it. `color` is a flag — `0` runs the palette and ignores the hue, `1`
 uses the `h`/`s`/`v` triple. Effects are 0 off, 1 solid, 2 breathing, 3 blink,
-4 tide, 5 custom. Speed is **0–4**: the firmware stores a 5 without complaint
+4 tide, and a fifth the app does not offer because nothing it can send drives it.
+Tide always runs the palette, so it is given no colour control. Speed is **0–4**: the firmware stores a 5 without complaint
 but then behaves erratically, so the app does not offer one. The brightness byte
 is written and read back faithfully but has no visible effect on the
 SIDE-KEYBOARD, so the app does not offer a control for it.

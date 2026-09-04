@@ -51,6 +51,17 @@ struct InspectorPane: View {
                 }
             }
 
+            if let knob = model.selectedKnobIndex {
+                // A knob is one object with three movements; this is where you
+                // say which movement you are setting.
+                SegmentedSwitch(selection: Binding(
+                    get: { model.selectedKnobPart ?? .push },
+                    set: { model.selectedAction = InputAction.knob(knob, $0) }
+                ), items: [(KnobPart.left, "↺ Left"),
+                           (KnobPart.push, "⏺ Press"),
+                           (KnobPart.right, "↻ Right")])
+            }
+
             SegmentedSwitch(selection: $model.editorTab,
                             items: [(EditorTab.keys, "Keys"),
                                     (EditorTab.media, "Media"),

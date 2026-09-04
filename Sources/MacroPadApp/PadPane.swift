@@ -93,7 +93,6 @@ private struct ControlView: View {
                     subtitle: model.binding(for: action).summary,
                     selected: model.selectedAction == action,
                     mapped: model.binding(for: action).isSet,
-                    presses: model.statsEnabled ? model.presses(for: action) : nil,
                     size: CGSize(width: control.position.width * scale,
                                  height: control.position.height * scale))
                 .onTapGesture { model.selectedAction = action }
@@ -113,7 +112,6 @@ private struct KeyFace: View {
     let subtitle: String
     let selected: Bool
     let mapped: Bool
-    var presses: Int?
     let size: CGSize
 
     @State private var hovering = false
@@ -174,15 +172,6 @@ private struct KeyFace: View {
 
         }
         .frame(width: size.width, height: size.height)
-        .overlay(alignment: .topTrailing) {
-            if let presses, presses > 0 {
-                DotMatrixNumber(text: "\(presses)",
-                                dot: max(1.1, size.height * 0.018),
-                                gap: max(0.6, size.height * 0.010),
-                                color: Theme.textFaint)
-                    .padding(inset * 1.6)
-            }
-        }
         .scaleEffect(hovering && !selected ? 1.015 : 1)
         .animation(Theme.press, value: selected)
         .animation(Theme.hover, value: hovering)
@@ -191,30 +180,29 @@ private struct KeyFace: View {
     }
 }
 
-/// A knob, drawn as one: a ring of ticks, a bezel, a turned metal face and a
-/// pointer. Its three actions are the two flanks and the cap — turn left, turn
-/// right, press — so the control matches the movements it records.
+/// A knob, drawn as one piece — because it is one piece. Its three actions are
+/// a property of the object, chosen in the inspector once the knob is selected,
+/// rather than three hit targets crowding a circle too small to hold them.
 private struct KnobFace: View {
     @EnvironmentObject private var model: AppModel
     let index: Int
     let size: CGSize
 
+    @State private var hovering = false
+
     var body: some View {
         let d = min(size.width, size.height)
-        let bodyD = d * 0.54
+        let bodyD = d * 0.66
 
         ZStack {
             TickRing(diameter: d, count: 15)
-
-            KnobWing(index: index, part: .left, diameter: d)
-            KnobWing(index: index, part: .right, diameter: d)
 
             // Bezel
             Circle()
                 .fill(LinearGradient(colors: [Theme.bezelHigh, Theme.bezelLow],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: bodyD + d * 0.055, height: bodyD + d * 0.055)
-                .shadow(color: Theme.dropShadow, radius: 5, x: 1, y: 3)
+                .frame(width: bodyD + d * 0.06, height: bodyD + d * 0.06)
+                .shadow(color: Theme.dropShadow, radius: selected ? 3 : 6, x: 1, y: selected ? 2 : 4)
 
             // Turned metal face
             Circle()
@@ -231,28 +219,50 @@ private struct KnobFace: View {
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.30), lineWidth: 1))
                 .frame(width: bodyD, height: bodyD)
 
-            // Pointer, at the position that says which way it last went.
+            // Pointer.
             Circle()
-                .fill(pushMapped ? Theme.lampOn : Theme.lampOff)
-                .frame(width: d * 0.055, height: d * 0.055)
-                .shadow(color: pushMapped ? Theme.lampOn.opacity(0.8) : .clear, radius: 3)
-                .offset(y: -bodyD * 0.33)
+                .fill(mappedCount > 0 ? Theme.lampOn : Theme.lampOff)
+                .frame(width: d * 0.05, height: d * 0.05)
+                .shadow(color: mappedCount > 0 ? Theme.lampOn.opacity(0.8) : .clear, radius: 3)
+                .offset(y: -bodyD * 0.34)
+
+            // Three marks on the bezel saying which of its actions are set.
+            // They are engraved, not pressable — the knob is one target.
+            ForEach(Array(KnobPart.allCases.enumerated()), id: \.offset) { i, part in
+                Circle()
+                    .fill(model.binding(for: InputAction.knob(index, part)).isSet
+                          ? Theme.lampGood : Theme.lampOff.opacity(0.5))
+                    .frame(width: d * 0.035, height: d * 0.035)
+                    .offset(x: CGFloat(i - 1) * d * 0.075, y: bodyD * 0.62)
+            }
 
             PanelLabel(text: "K\(index)", colour: Theme.textFaint, size: max(7, d * 0.085))
                 .offset(y: d * 0.44)
         }
         .frame(width: size.width, height: size.height)
-        .contentShape(Circle().inset(by: d * 0.19))
-        .onTapGesture { model.selectedAction = InputAction.knob(index, .push) }
         .overlay(
             Circle()
-                .strokeBorder(pushSelected ? Theme.lampOn : .clear, lineWidth: 2)
-                .frame(width: bodyD + d * 0.055, height: bodyD + d * 0.055)
+                .strokeBorder(selected ? Theme.lampOn : .clear, lineWidth: 2)
+                .frame(width: bodyD + d * 0.06, height: bodyD + d * 0.06)
         )
+        .scaleEffect(hovering && !selected ? 1.02 : 1)
+        .animation(Theme.hover, value: hovering)
+        .animation(Theme.press, value: selected)
+        .contentShape(Circle())
+        .onHover { h in hovering = h }
+        .onTapGesture {
+            // Keep whichever of this knob's actions was already being edited.
+            if !selected { model.selectedAction = InputAction.knob(index, .push) }
+        }
     }
 
-    private var pushMapped: Bool { model.binding(for: InputAction.knob(index, .push)).isSet }
-    private var pushSelected: Bool { model.selectedAction == InputAction.knob(index, .push) }
+    private var selected: Bool {
+        KnobPart.allCases.contains { model.selectedAction == InputAction.knob(index, $0) }
+    }
+
+    private var mappedCount: Int {
+        KnobPart.allCases.filter { model.binding(for: InputAction.knob(index, $0)).isSet }.count
+    }
 }
 
 /// The ticks engraved around a knob.
@@ -269,60 +279,10 @@ private struct TickRing: View {
                     .fill(Theme.textFaint)
                     .frame(width: max(1, diameter * 0.012),
                            height: diameter * (i == 0 || i == count - 1 || i == count / 2 ? 0.07 : 0.045))
-                    .offset(y: -diameter * 0.38)
+                    .offset(y: -diameter * 0.42)
                     .rotationEffect(.degrees(angle))
             }
         }
         .frame(width: diameter, height: diameter)
-    }
-}
-
-/// One side of the knob: the hit target for turning that way.
-private struct KnobWing: View {
-    @EnvironmentObject private var model: AppModel
-    let index: Int
-    let part: KnobPart
-    let diameter: CGFloat
-
-    @State private var hovering = false
-
-    var body: some View {
-        let action = InputAction.knob(index, part)
-        let selected = model.selectedAction == action
-        let mapped = model.binding(for: action).isSet
-        let x = (part == .left ? -1.0 : 1.0) * diameter * 0.46
-
-        VStack(spacing: diameter * 0.02) {
-            Text(part.symbol)
-                .font(.system(size: diameter * 0.17, weight: .semibold))
-                .foregroundStyle(selected ? Theme.textOnWell : (mapped ? Theme.text : Theme.textFaint))
-            Lamp(on: mapped, colour: selected ? Theme.lampOn : Theme.lampGood,
-                 size: diameter * 0.055)
-        }
-        .frame(width: diameter * 0.28, height: diameter * 0.4)
-        .modifier(WingSurface(selected: selected, hovering: hovering,
-                              radius: diameter * 0.07))
-        .contentShape(RoundedRectangle(cornerRadius: diameter * 0.07, style: .continuous))
-        .onTapGesture { model.selectedAction = action }
-        .offset(x: x)
-        .onHover { h in withAnimation(Theme.hover) { hovering = h } }
-        .help("Knob \(index) \(part.symbol)")
-    }
-}
-
-private struct WingSurface: ViewModifier {
-    let selected: Bool
-    let hovering: Bool
-    let radius: CGFloat
-
-    func body(content: Content) -> some View {
-        if selected {
-            content
-                .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(Theme.well))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Theme.outline, lineWidth: 1))
-        } else {
-            content.lifted(radius: radius, depth: hovering ? 0.9 : 0.6)
-        }
     }
 }

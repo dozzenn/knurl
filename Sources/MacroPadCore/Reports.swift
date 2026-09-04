@@ -392,7 +392,9 @@ public struct BacklightState: Equatable, Sendable {
     }
 
     /// Named modes, taken from the vendor's definition file for this family.
-    public static let modeNames = ["Off", "Solid", "Breathing", "Blink", "Tide", "Custom"]
+    /// The firmware also has a sixth "custom" mode, which does nothing this app
+    /// can drive, so it is not offered.
+    public static let modeNames = ["Off", "Solid", "Breathing", "Blink", "Tide"]
 
     public var modeName: String {
         Int(mode) < Self.modeNames.count ? Self.modeNames[Int(mode)] : "Mode \(mode)"
@@ -400,7 +402,9 @@ public struct BacklightState: Equatable, Sendable {
 
     /// Which controls make sense for the current mode.
     public var usesSpeed: Bool { mode >= 2 && mode <= 4 }
-    public var usesColor: Bool { mode >= 1 && mode <= 4 }
+    /// Tide always runs the palette — offering it a single colour would be a
+    /// control that changes nothing.
+    public var usesColor: Bool { mode >= 1 && mode <= 3 }
     public var isOff: Bool { mode == 0 }
 
     // Both are 0…4 in the vendor's own configurator; 5 is out of range and the

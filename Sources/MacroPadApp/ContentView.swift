@@ -6,7 +6,7 @@ import MacroPadCore
 /// Settings are a section here rather than a separate window behind a menu —
 /// on a control panel you can see every switch at once.
 enum PanelSection: String, CaseIterable, Identifiable {
-    case keys, backlight, apps, presets, stats, general, about
+    case keys, backlight, apps, presets, general, about
 
     var id: String { rawValue }
 
@@ -16,7 +16,6 @@ enum PanelSection: String, CaseIterable, Identifiable {
         case .backlight: return "Backlight"
         case .apps: return "Apps"
         case .presets: return "Presets"
-        case .stats: return "Stats"
         case .general: return "General"
         case .about: return "About"
         }
@@ -28,7 +27,6 @@ enum PanelSection: String, CaseIterable, Identifiable {
         case .backlight: return "lightbulb.fill"
         case .apps: return "app.badge.fill"
         case .presets: return "bookmark.fill"
-        case .stats: return "chart.bar.fill"
         case .general: return "gearshape.fill"
         case .about: return "info.circle.fill"
         }
@@ -37,7 +35,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
     var group: String {
         switch self {
         case .keys, .backlight, .apps, .presets: return "Keypad"
-        case .stats, .general, .about: return "MacroPad"
+        case .general, .about: return "MacroPad"
         }
     }
 }
@@ -62,7 +60,6 @@ struct ContentView: View {
                     case .backlight: BacklightSection()
                     case .apps: AppsSection()
                     case .presets: PresetsSection()
-                    case .stats: StatsSection()
                     case .general: GeneralSection()
                     case .about: AboutSection()
                     }

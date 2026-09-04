@@ -174,9 +174,7 @@ final class AppModel: ObservableObject {
         profile = scopeStore.profile(for: currentScopeKey)
         if autoSwitchEnabled { startWatchingApps() }
         refreshPresets()
-        loadCounts()
         applyAppearance()
-        if statsEnabled { startCounting() }
         transport.startMonitoring()
         deviceListChanged()
         for delay in [0.35, 1.2] {
@@ -228,7 +226,6 @@ final class AppModel: ObservableObject {
             adoptLayoutForSelection()
             setStatus("Connected — \(displayName(for: candidate)), \(activeProtocol.displayName)")
             syncFromDevice()
-            if statsEnabled { restartCounting() }
         }
     }
 
@@ -244,7 +241,6 @@ final class AppModel: ObservableObject {
             adoptLayoutForSelection()
             setStatus("Connected — \(displayName(for: candidate)), \(activeProtocol.displayName)")
             syncFromDevice()
-            if statsEnabled { stopCounting(); startCounting() }
         case .failure(let error):
             isConnected = false
             setStatus(error.localizedDescription, error: true)
@@ -333,6 +329,17 @@ final class AppModel: ObservableObject {
         persistCurrentScope()
         loadEditor()
         setStatus("Read \(found) mapping\(found == 1 ? "" : "s") off the keypad")
+    }
+
+    /// Which knob the selection belongs to, if any.
+    var selectedKnobIndex: Int? {
+        guard selectedAction.rawValue >= 23 else { return nil }
+        return (Int(selectedAction.rawValue) - 23) / 3 + 1
+    }
+
+    var selectedKnobPart: KnobPart? {
+        guard selectedAction.rawValue >= 23 else { return nil }
+        return KnobPart(rawValue: (Int(selectedAction.rawValue) - 23) % 3)
     }
 
     // MARK: - Editor <-> profile
@@ -605,158 +612,6 @@ final class AppModel: ObservableObject {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             setStatus("Could not change the login item: \(error.localizedDescription)", error: true)
         }
-    }
-
-    // MARK: - Stats
-
-    /// Counts presses on the keypad itself — not everything you type.
-    ///
-    /// The pad's own keyboard interface is watched and each press is attributed
-    /// back to the control that produced it by matching the report against the
-    /// mappings currently loaded. Off by default; it is a nicety, not a reason
-    /// to have the app listening.
-    @Published var statsEnabled: Bool = UserDefaults.standard.bool(forKey: "statsEnabled") {
-        didSet {
-            UserDefaults.standard.set(statsEnabled, forKey: "statsEnabled")
-            statsEnabled ? startCounting() : stopCounting()
-        }
-    }
-
-    /// InputAction raw value → presses.
-    @Published private(set) var pressCounts: [UInt8: Int] = [:]
-    /// Every press the keypad emitted, including ones no mapping explains.
-    @Published private(set) var totalPresses = 0
-    @Published private(set) var statsListening = false
-
-    private var statsTransports: [PadTransport] = []
-    private var lastKeyboardReport: [UInt8] = []
-    private var lastConsumerUsage: UInt16 = 0
-
-    func presses(for action: InputAction) -> Int { pressCounts[action.rawValue] ?? 0 }
-
-    func resetStats() {
-        pressCounts = [:]
-        totalPresses = 0
-        persistCounts()
-    }
-
-    private func persistCounts() {
-        let raw = pressCounts.reduce(into: [String: Int]()) { $0["\($1.key)"] = $1.value }
-        UserDefaults.standard.set(raw, forKey: "pressCounts")
-        UserDefaults.standard.set(totalPresses, forKey: "totalPresses")
-    }
-
-    private func loadCounts() {
-        totalPresses = UserDefaults.standard.integer(forKey: "totalPresses")
-        guard let raw = UserDefaults.standard.dictionary(forKey: "pressCounts") as? [String: Int] else { return }
-        pressCounts = raw.reduce(into: [UInt8: Int]()) {
-            if let k = UInt8($1.key) { $0[k] = $1.value }
-        }
-    }
-
-    func restartCounting() {
-        stopCounting()
-        startCounting()
-    }
-
-    /// Opens every input interface the keypad has — the plain keyboard and the
-    /// one that carries the knob's media codes — so a turn counts as much as a
-    /// press.
-    private func startCounting() {
-        guard statsTransports.isEmpty, let candidate = selectedCandidate else { return }
-
-        let probe = PadTransport()
-        probe.startMonitoring()
-        let inputs = probe.allInterfaces.filter {
-            $0.vendorId == candidate.vendorId && $0.productId == candidate.productId
-                && $0.usagePage == 0x01 && $0.maxInputReportSize > 0
-        }
-        guard !inputs.isEmpty else {
-            setStatus("Could not find this keypad's input interface to count", error: true)
-            return
-        }
-
-        for target in inputs {
-            let transport = PadTransport()
-            transport.startMonitoring()
-            guard let match = transport.allInterfaces.first(where: { $0.id == target.id }) else { continue }
-            transport.onInputReport = { [weak self] bytes in
-                Task { @MainActor in self?.countReport(bytes, fromBootKeyboard: target.maxInputReportSize == 8) }
-            }
-            if case .success = transport.open(match) {
-                statsTransports.append(transport)
-            }
-        }
-        statsListening = !statsTransports.isEmpty
-        if !statsListening {
-            setStatus("macOS would not let the app watch this keypad's input", error: true)
-        }
-    }
-
-    private func stopCounting() {
-        statsTransports.forEach { $0.close() }
-        statsTransports.removeAll()
-        statsListening = false
-    }
-
-    /// A boot keyboard report is `[modifiers, 0, k1…k6]`; the consumer report is
-    /// `[3, low, high]`. Either way, a code that was not in the previous report
-    /// is a fresh press.
-    ///
-    /// The total counts every press. Attribution to a particular key is a bonus:
-    /// it needs the mapping on screen to match what the hardware sent, which is
-    /// not true right after an edit that has not been saved.
-    private func countReport(_ bytes: [UInt8], fromBootKeyboard: Bool) {
-        if fromBootKeyboard {
-            guard bytes.count >= 3 else { return }
-            let modifiers = Modifier(rawValue: bytes[0])
-            let usages = Set(bytes.dropFirst(2).filter { $0 != 0 })
-            let previous = Set(lastKeyboardReport.count >= 3
-                               ? lastKeyboardReport.dropFirst(2).filter { $0 != 0 } : [])
-            lastKeyboardReport = bytes
-
-            for usage in usages.subtracting(previous) {
-                totalPresses += 1
-                if let action = action(matchingUsage: usage, modifiers: modifiers) {
-                    pressCounts[action.rawValue, default: 0] += 1
-                }
-            }
-        } else {
-            // Consumer page: report id 3, then a little-endian usage.
-            guard bytes.count >= 3, bytes[0] == 3 else { return }
-            let usage = UInt16(bytes[1]) | (UInt16(bytes[2]) << 8)
-            defer { lastConsumerUsage = usage }
-            guard usage != 0, usage != lastConsumerUsage else { return }
-            totalPresses += 1
-            if let action = action(matchingConsumer: usage) {
-                pressCounts[action.rawValue, default: 0] += 1
-            }
-        }
-        persistCounts()
-    }
-
-    private func action(matchingUsage usage: UInt8, modifiers: Modifier) -> InputAction? {
-        forEachMapping { action, binding in
-            if case .keys(let sequence, _) = binding, let first = sequence.first,
-               first.usage == usage, first.modifiers == modifiers { return action }
-            return nil
-        }
-    }
-
-    private func action(matchingConsumer usage: UInt16) -> InputAction? {
-        forEachMapping { action, binding in
-            if case .media(let key) = binding, key.usage == usage { return action }
-            return nil
-        }
-    }
-
-    private func forEachMapping(_ test: (InputAction, ControlBinding) -> InputAction?) -> InputAction? {
-        for control in layout.controls {
-            for action in control.actions {
-                if let hit = test(action, profile[layer, action]) { return hit }
-            }
-        }
-        return nil
     }
 
     // MARK: - Appearance

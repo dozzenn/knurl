@@ -17,7 +17,8 @@ No installer, no drivers, no `hidapi`. Just `MacroPad.app`.
   * a **media key** (play/pause, volume, and more)
   * a **mouse action** (clicks, scroll) with held modifiers
 * Multi-layer support on devices that have layers
-* LED mode and colour
+* Backlight: effect, brightness, speed and colour, read from the keypad and
+  written back live
 * Per-control upload, or upload the whole profile at once
 * Profiles saved as JSON
 * A live HID log showing the exact bytes on the wire
@@ -130,9 +131,19 @@ mouse move, `0x60` macro, `0x80` open a website, `0xFF` custom combination.
 Buttons occupy table indices 0–15; each knob owns three consecutive slots from
 16 (press, then the two rotations).
 
-Not yet implemented for this family: mouse actions, backlight, and multi-key
-macros — macros live in a separate table addressed by its own commands. The app
-refuses to write those rather than guessing at the encoding.
+Backlight is one read/write block: `06 0A` reads it, and
+`06 0B 0B 00 00 <type> 00 <mode> <brightness> <speed> <direction> <color> 00 <h> <s> <v>`
+writes it. `color` is a flag — `0` runs the palette and ignores the hue, `1`
+uses the `h`/`s`/`v` triple. Effects are 0 off, 1 solid, 2 breathing, 3 blink,
+4 tide, 5 custom.
+
+The app reads the key table and the backlight off the keypad whenever it
+connects, so the window shows what the hardware actually holds instead of an
+empty profile.
+
+Not yet implemented for this family: mouse actions and multi-key macros —
+macros live in a separate table addressed by its own commands. The app refuses
+to write those rather than guessing at the encoding.
 
 Note that sub-command `0x5A` on this family jumps the device into its bootloader,
 which is why blind command sweeping is a bad way to explore it.

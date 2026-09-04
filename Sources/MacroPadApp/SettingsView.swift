@@ -29,6 +29,16 @@ struct SettingsView: View {
                             .controlSize(.small)
                     }
                 }
+                SettingRow(title: "Open at login",
+                           detail: "Start MacroPad when you log in") {
+                    Toggle("", isOn: Binding(
+                        get: { model.launchAtLogin },
+                        set: { model.setLaunchAtLogin($0) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
                 SettingRow(title: "Menu bar only",
                            detail: "Hide the Dock icon and live in the menu bar") {
                     Toggle("", isOn: $model.hideDockIcon)

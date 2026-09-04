@@ -1,5 +1,6 @@
 import AppKit
 import UniformTypeIdentifiers
+import ServiceManagement
 import Combine
 import SwiftUI
 import MacroPadCore
@@ -56,7 +57,9 @@ final class AppModel: ObservableObject {
     // MARK: Saved profiles
 
     @Published private(set) var profiles: [ProfileStore.Entry] = []
-    @Published var activeProfileName: String?
+    @Published var activeProfileName: String? {
+        didSet { UserDefaults.standard.set(activeProfileName, forKey: "activeProfileName") }
+    }
     private let profileStore = ProfileStore()
 
     // MARK: Editor state
@@ -157,16 +160,14 @@ final class AppModel: ObservableObject {
     func supports(_ tab: EditorTab) -> Bool {
         guard activeProtocol == .webHub else { return true }
         switch tab {
-        case .keys, .media: return true
-        case .mouse, .led: return false
+        case .keys, .media, .led: return true
+        case .mouse: return false
         }
     }
 
     var unsupportedNote: String? {
         guard activeProtocol == .webHub, !supports(editorTab) else { return nil }
-        return editorTab == .mouse
-            ? "Mouse actions are not supported on this device yet — its encoding for them has not been worked out, and writing a guess would corrupt the key table."
-            : "Backlight is not supported on this device yet — it uses a separate command set that has not been worked out."
+        return "Mouse actions are not supported on this device yet — its encoding for them has not been worked out, and writing a guess would corrupt the key table."
     }
 
     init() {
@@ -177,6 +178,7 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.append(entry) }
         }
         nicknames = (UserDefaults.standard.dictionary(forKey: Self.nicknameKey) as? [String: String]) ?? [:]
+        activeProfileName = UserDefaults.standard.string(forKey: "activeProfileName")
         transport.startMonitoring()
         deviceListChanged()
         refreshProfiles()
@@ -219,7 +221,8 @@ final class AppModel: ObservableObject {
         case .success:
             isConnected = true
             adoptLayoutForSelection()
-            setStatus("Connected — \(candidate.displayName), \(activeProtocol.displayName), report id \(reportId)")
+            setStatus("Connected — \(displayName(for: candidate)), \(activeProtocol.displayName)")
+            syncFromDevice()
         case .failure(let error):
             isConnected = false
             setStatus(error.localizedDescription, error: true)
@@ -230,6 +233,87 @@ final class AppModel: ObservableObject {
         transport.close()
         isConnected = false
         setStatus("Not connected")
+    }
+
+    // MARK: - Reading the keypad
+
+    private var pendingReplies: [[UInt8]] = []
+
+    /// True while the editor is showing exactly what was read off the keypad.
+    @Published private(set) var loadedFromDevice = false
+
+    private func matchingProfileName(for candidate: Profile) -> String? {
+        for entry in profiles {
+            guard let saved = try? ProfileStore().load(entry) else { continue }
+            if saved.bindings == candidate.bindings { return entry.name }
+        }
+        return nil
+    }
+
+    /// Pulls what is actually stored on the keypad into the editor.
+    ///
+    /// Without this the window opens showing an empty profile next to a keypad
+    /// that is full of mappings, which reads as "my mappings are gone".
+    func syncFromDevice() {
+        guard activeProtocol == .webHub, isConnected else { return }
+        pendingReplies.removeAll()
+        transport.onInputReport = { [weak self] bytes in
+            Task { @MainActor in self?.pendingReplies.append(bytes) }
+        }
+
+        for block in 0..<3 {
+            _ = transport.write(WebHubComposer.keyTableRequest(blockOffset: block * 56, layer: layer),
+                                channel: channel)
+            usleep(60_000)
+        }
+        _ = transport.write(WebHubComposer.backlightRequest(), channel: channel)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            self?.applyReplies()
+        }
+    }
+
+    private func applyReplies() {
+        transport.onInputReport = nil
+        let replies = pendingReplies
+        pendingReplies.removeAll()
+
+        if let lightReply = replies.first(where: { $0.count > 1 && $0[0] == 0xAA && $0[1] == 10 }),
+           let light = BacklightState(reply: lightReply) {
+            backlight = light
+            backlightIsLive = true
+        }
+
+        // Key table blocks arrive in request order and each carries 56 payload
+        // bytes from index 8.
+        var table: [UInt8] = []
+        for r in replies where r.count > 8 && r.first == 0xAA && r[1] == 8 {
+            table.append(contentsOf: r[8...])
+        }
+        guard table.count >= 4 else { return }
+
+        var found = 0
+        var restored = Profile(name: profile.name, layoutName: layout.name)
+        for i in 0..<(table.count / 4) {
+            let entry = Array(table[(i * 4)..<(i * 4 + 4)])
+            guard let action = WebHubComposer.action(forKeyIndex: i),
+                  let binding = WebHubComposer.binding(fromEntry: entry) else { continue }
+            restored[layer, action] = binding
+            found += 1
+        }
+        guard found > 0 else { return }
+
+        restored.ledMode = profile.ledMode
+        restored.ledColor = profile.ledColor
+        profile = restored
+        loadedFromDevice = true
+
+        // If what the keypad holds is exactly one of the saved profiles, say so;
+        // otherwise the card says the mappings came off the hardware rather than
+        // implying unsaved edits.
+        activeProfileName = matchingProfileName(for: restored)
+        loadEditor()
+        setStatus("Read \(found) mapping\(found == 1 ? "" : "s") from the keypad")
     }
 
     // MARK: - Editor <-> profile
@@ -260,6 +344,7 @@ final class AppModel: ObservableObject {
 
     /// Writes the editor state back into the profile for the selected control.
     func commit() {
+        loadedFromDevice = false
         switch editorTab {
         case .keys:
             profile[layer, selectedAction] = sequence.isEmpty ? .unset : .keys(sequence: sequence, delay: delay)
@@ -273,6 +358,7 @@ final class AppModel: ObservableObject {
     }
 
     func clearBinding() {
+        loadedFromDevice = false
         sequence = []
         delay = 0
         profile[layer, selectedAction] = .unset
@@ -348,6 +434,11 @@ final class AppModel: ObservableObject {
         isRecording = false
         guard ensureConnected() else { return }
         commit()
+
+        if editorTab == .led, activeProtocol == .webHub {
+            applyBacklight()
+            return
+        }
 
         let reports: [PadReport]
         if editorTab == .led {
@@ -444,6 +535,7 @@ final class AppModel: ObservableObject {
             let loaded = try profileStore.load(entry)
             profile = loaded
             activeProfileName = entry.name
+            loadedFromDevice = false
             if let match = LayoutLibrary.all.first(where: { $0.name == loaded.layoutName }) { layout = match }
             loadEditor()
             if isConnected {
@@ -479,6 +571,39 @@ final class AppModel: ObservableObject {
             setStatus("Deleted “\(entry.name)”")
         } catch {
             setStatus("Could not delete: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    // MARK: - Backlight
+
+    @Published var backlight = BacklightState()
+    @Published private(set) var backlightIsLive = false
+
+    func applyBacklight() {
+        guard let webhub = composer as? WebHubComposer else {
+            setStatus("Backlight is not supported on this device", error: true)
+            return
+        }
+        guard ensureConnected() else { return }
+        send(webhub.backlight(backlight), describing: "backlight")
+    }
+
+    // MARK: - Open at login
+
+    @Published private(set) var launchAtLogin = SMAppService.mainApp.status == .enabled
+
+    func setLaunchAtLogin(_ on: Bool) {
+        do {
+            if on {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+            setStatus(launchAtLogin ? "MacroPad will open at login" : "MacroPad will not open at login")
+        } catch {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+            setStatus("Could not change the login item: \(error.localizedDescription)", error: true)
         }
     }
 

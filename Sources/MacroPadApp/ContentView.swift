@@ -187,9 +187,10 @@ private struct ProfileCard: View {
                     .font(.system(size: 13))
                     .foregroundStyle(model.activeProfileName == nil ? Theme.textFaint : Theme.accent)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(model.activeProfileName ?? "Unsaved changes")
+                    Text(title)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(model.activeProfileName == nil ? Theme.textMuted : Theme.text)
+                        .foregroundStyle(model.activeProfileName == nil && !model.loadedFromDevice
+                                         ? Theme.textMuted : Theme.text)
                         .lineLimit(1)
                     Text(mappedSummary)
                         .font(.system(size: 10.5))
@@ -209,9 +210,18 @@ private struct ProfileCard: View {
         }
     }
 
+    /// Never leave the user guessing whether their mappings survived: say
+    /// where what they are looking at came from.
+    private var title: String {
+        if let name = model.activeProfileName { return name }
+        return model.loadedFromDevice ? "On the keypad" : "Unsaved changes"
+    }
+
     private var mappedSummary: String {
         let n = model.profile.configured(layerCount: model.layout.layerCount).count
-        return n == 0 ? "Nothing mapped yet" : (n == 1 ? "1 key mapped" : "\(n) keys mapped")
+        let count = n == 0 ? "Nothing mapped" : (n == 1 ? "1 key mapped" : "\(n) keys mapped")
+        if model.loadedFromDevice { return count + " · read from the keypad" }
+        return count
     }
 }
 

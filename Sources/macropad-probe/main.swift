@@ -225,6 +225,59 @@ case "setkey":
     RunLoop.current.run(until: Date().addingTimeInterval(0.6))
     transport.close()
 
+case "light":
+    // Pure read of the backlight state: [6, 10]; the reply carries 11 bytes
+    // from index 5.
+    guard let best = transport.bestCandidate else { print("No device."); exit(1) }
+    var reply: [UInt8]? = nil
+    transport.onLog = { entry in
+        print("  \(entry.outgoing ? "→" : "←") \(entry.text)")
+        if !entry.outgoing, reply == nil {
+            reply = entry.text.split(separator: "|").last?
+                .split(separator: " ").compactMap { UInt8($0, radix: 16) }
+        }
+    }
+    if case .failure(let e) = transport.open(best) {
+        print("open failed: \(e.localizedDescription)"); exit(1)
+    }
+    _ = transport.write(PadReport(reportId: 0, data: [6, 10]), channel: .output)
+    RunLoop.current.run(until: Date().addingTimeInterval(1.2))
+    transport.close()
+
+    if let r = reply, r.count >= 16 {
+        let e = Array(r[5..<16])
+        print("")
+        print("  type              \(e[0])")
+        print("  mode              \(e[2])")
+        print("  brightness        \(e[3])")
+        print("  speed             \(e[4])")
+        print("  direction         \(e[5])")
+        print("  color             \(e[6])")
+        print("  singleColorIndex  \(e[7])")
+        print("  h/s/v (raw)       \(e[8]) / \(e[9]) / \(e[10])")
+    } else {
+        print("\n  no usable reply")
+    }
+
+case "setlight":
+    // setlight <type> <mode> <brightness> <speed> <direction> <color> <h> <s> <v>
+    guard args.count >= 10, let vals = try? args[1...9].map({ (a: String) -> UInt8 in
+        guard let v = UInt8(a) else { throw NSError(domain: "", code: 0) }; return v
+    }) else {
+        print("usage: setlight <type> <mode> <brightness> <speed> <direction> <color> <h> <s> <v>")
+        exit(2)
+    }
+    guard let best = transport.bestCandidate else { print("No device."); exit(1) }
+    if case .failure(let e) = transport.open(best) {
+        print("open failed: \(e.localizedDescription)"); exit(1)
+    }
+    let a: [UInt8] = [vals[0], 0, vals[1], vals[2], vals[3], vals[4], vals[5], 0,
+                      vals[6], vals[7], vals[8]]
+    _ = transport.write(PadReport(reportId: 0, data: [6, 11, UInt8(a.count), 0, 0] + a),
+                        channel: .output)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+    transport.close()
+
 case "access":
     // macOS gates input reports from keyboard-usage devices behind Input
     // Monitoring. Ask the system rather than guessing from silence.

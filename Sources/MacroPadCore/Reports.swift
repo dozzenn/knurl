@@ -354,3 +354,106 @@ public struct WebHubComposer: ReportComposer {
     /// How many keystrokes one table entry can hold.
     public static let maxKeystrokes = 1
 }
+
+// MARK: - Backlight
+
+/// The backlight state as the WebHub firmware stores it.
+///
+/// Read and written as one block, so a change to a single field keeps the
+/// values the device already had rather than resetting them.
+public struct BacklightState: Equatable, Sendable {
+    public var type: UInt8 = 1
+    public var mode: UInt8 = 1
+    public var brightness: UInt8 = 4
+    public var speed: UInt8 = 2
+    public var direction: UInt8 = 0
+    public var color: UInt8 = 0
+    public var singleColorIndex: UInt8 = 0
+    /// Raw 0…255 as the device stores them, not degrees and percent.
+    public var hue: UInt8 = 0
+    public var saturation: UInt8 = 255
+    public var value: UInt8 = 255
+
+    public init() {}
+
+    public init?(reply: [UInt8]) {
+        guard reply.count >= 16, reply[0] == 0xAA else { return nil }
+        let e = Array(reply[5..<16])
+        type = e[0]
+        mode = e[2]
+        brightness = e[3]
+        speed = e[4]
+        direction = e[5]
+        color = e[6]
+        singleColorIndex = e[7]
+        hue = e[8]
+        saturation = e[9]
+        value = e[10]
+    }
+
+    /// Named modes, taken from the vendor's definition file for this family.
+    public static let modeNames = ["Off", "Solid", "Breathing", "Blink", "Tide", "Custom"]
+
+    public var modeName: String {
+        Int(mode) < Self.modeNames.count ? Self.modeNames[Int(mode)] : "Mode \(mode)"
+    }
+
+    /// Which controls make sense for the current mode.
+    public var usesSpeed: Bool { mode >= 2 && mode <= 4 }
+    public var usesColor: Bool { mode >= 1 && mode <= 4 }
+    public var isOff: Bool { mode == 0 }
+
+    public static let maxBrightness: UInt8 = 5
+    public static let maxSpeed: UInt8 = 5
+}
+
+public extension WebHubComposer {
+    /// Read-only request for the current backlight state.
+    static func backlightRequest() -> PadReport {
+        PadReport(reportId: 0, data: [6, 10])
+    }
+
+    func backlight(_ state: BacklightState) -> [PadReport] {
+        var a: [UInt8] = [state.type, 0, state.mode, state.brightness, state.speed,
+                          state.direction, state.color, 0,
+                          state.hue, state.saturation, state.value]
+        if state.mode == 0 { a[6] = 0 }
+        return [PadReport(reportId: 0, data: [6, 11, UInt8(a.count), 0, 0] + a)]
+    }
+
+    /// Inverse of `keyIndex(for:)`, for turning what the device reports back
+    /// into the controls the UI shows.
+    static func action(forKeyIndex index: Int) -> InputAction? {
+        if index >= 0 && index < 12 { return InputAction(rawValue: UInt8(index + 1)) }
+        guard index >= 16 else { return nil }
+        let knob = (index - 16) / 3
+        let slot = (index - 16) % 3
+        guard knob < 3 else { return nil }
+        let part: Int
+        switch slot {
+        case 0: part = 1        // push
+        case 1: part = 2        // right
+        default: part = 0       // left
+        }
+        return InputAction(rawValue: UInt8(23 + knob * 3 + part))
+    }
+
+    /// Turns one 4-byte table entry into a binding the editor understands.
+    static func binding(fromEntry e: [UInt8]) -> ControlBinding? {
+        guard e.count >= 4 else { return nil }
+        switch EntryType(rawValue: e[0]) {
+        case .standard:
+            guard e[2] != 0 || e[1] != 0 else { return nil }
+            return .keys(sequence: [KeyStroke(usage: e[2], modifiers: Modifier(rawValue: e[1]))],
+                         delay: 0)
+        case .consumer:
+            let usage = UInt16(e[1]) | (UInt16(e[2]) << 8)
+            guard usage != 0 else { return nil }
+            let known = MediaKey.all.first { $0.usage == usage }
+            return .media(known ?? MediaKey(name: String(format: "Consumer 0x%04X", usage),
+                                            usage: usage))
+        default:
+            return nil
+        }
+    }
+}

@@ -87,6 +87,8 @@ public final class PadTransport {
     public var onDeviceListChanged: (() -> Void)?
     /// Called on the main run loop for every report written or received.
     public var onLog: ((HIDLogEntry) -> Void)?
+    /// Raw input reports, for the request/response commands.
+    public var onInputReport: (([UInt8]) -> Void)?
 
     private var manager: IOHIDManager?
     private var device: IOHIDDevice?
@@ -307,6 +309,7 @@ public final class PadTransport {
             me.onLog?(HIDLogEntry(outgoing: false,
                                   text: String(format: "id %02X | %@", reportId, hex),
                                   ok: true))
+            me.onInputReport?(bytes)
         }, ctx)
         IOHIDDeviceScheduleWithRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
 

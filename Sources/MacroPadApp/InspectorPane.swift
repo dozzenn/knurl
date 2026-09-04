@@ -430,6 +430,145 @@ private struct LedEditor: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
+        if model.activeProtocol == .webHub {
+            WebHubBacklightEditor()
+        } else {
+            LegacyLedEditor()
+        }
+    }
+}
+
+/// The backlight as this firmware actually models it: one effect plus the
+/// handful of parameters that effect uses. Controls that the current effect
+/// ignores are hidden rather than shown doing nothing.
+private struct WebHubBacklightEditor: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        SectionLabel(text: "Effect")
+
+        VStack(spacing: 1) {
+            ForEach(Array(BacklightState.modeNames.enumerated()), id: \.offset) { index, name in
+                Row(title: name,
+                    icon: index == 0 ? "lightbulb.slash" : "lightbulb.fill",
+                    selected: model.backlight.mode == UInt8(index),
+                    action: {
+                        model.backlight.mode = UInt8(index)
+                        model.applyBacklight()
+                    }) {
+                    if model.backlight.mode == UInt8(index) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                }
+            }
+        }
+
+        if !model.backlight.isOff {
+            SectionLabel(text: "Brightness")
+            StepRow(value: Binding(
+                get: { Int(model.backlight.brightness) },
+                set: { model.backlight.brightness = UInt8($0); model.applyBacklight() }
+            ), maximum: Int(BacklightState.maxBrightness))
+
+            if model.backlight.usesSpeed {
+                SectionLabel(text: "Speed")
+                StepRow(value: Binding(
+                    get: { Int(model.backlight.speed) },
+                    set: { model.backlight.speed = UInt8($0); model.applyBacklight() }
+                ), maximum: Int(BacklightState.maxSpeed))
+            }
+
+            if model.backlight.usesColor {
+                SectionLabel(text: "Colour")
+                Segmented(selection: Binding(
+                    get: { model.backlight.color },
+                    set: { model.backlight.color = $0; model.applyBacklight() }
+                ), items: [(UInt8(0), "Rainbow", "circle.hexagongrid.fill"),
+                           (UInt8(1), "One colour", "paintpalette.fill")])
+                .padding(.horizontal, 3)
+
+                if model.backlight.color == 1 {
+                    HueSlider(hue: Binding(
+                        get: { Double(model.backlight.hue) },
+                        set: { model.backlight.hue = UInt8($0) }
+                    ), onCommit: { model.applyBacklight() })
+                    .padding(.top, 10)
+                    .padding(.horizontal, 3)
+                }
+            }
+        }
+
+        Text(model.backlightIsLive
+             ? "These are the keypad's current settings, read from the hardware. Changes are written straight away."
+             : "Connect the keypad to read its current backlight.")
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.textFaint)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 3)
+            .padding(.top, 14)
+    }
+}
+
+/// A small 0…n stepper drawn as segments, which reads better than a slider for
+/// a range this short.
+private struct StepRow: View {
+    @Binding var value: Int
+    let maximum: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0...maximum, id: \.self) { step in
+                Button {
+                    value = step
+                } label: {
+                    Text("\(step)")
+                        .font(.system(size: 12, weight: value == step ? .semibold : .regular))
+                        .foregroundStyle(value == step ? Theme.text : Theme.textFaint)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 26)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                                .fill(value == step ? Theme.accent.opacity(0.26) : Theme.fill)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                                .strokeBorder(value == step ? Theme.accent.opacity(0.5) : Theme.hairline,
+                                              lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+        .padding(.horizontal, 3)
+    }
+}
+
+private struct HueSlider: View {
+    @Binding var hue: Double
+    let onCommit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Slider(value: $hue, in: 0...255, step: 1, onEditingChanged: { editing in
+                if !editing { onCommit() }
+            })
+            .controlSize(.small)
+            .tint(Color(hue: hue / 255, saturation: 0.85, brightness: 1))
+
+            LinearGradient(colors: (0...12).map { Color(hue: Double($0) / 12, saturation: 0.85, brightness: 1) },
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(height: 6)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        }
+    }
+}
+
+private struct LegacyLedEditor: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
         SectionLabel(text: "Backlight mode")
 
         VStack(spacing: 1) {
@@ -460,7 +599,7 @@ private struct LedEditor: View {
             .padding(.top, 2)
         }
 
-        Text("Backlight applies to the whole pad, not to one key. Press Upload to send it.")
+        Text("Backlight applies to the whole pad, not to one key. Press Save to send it.")
             .font(Theme.caption)
             .foregroundStyle(Theme.textFaint)
             .fixedSize(horizontal: false, vertical: true)

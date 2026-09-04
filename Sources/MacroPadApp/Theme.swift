@@ -74,6 +74,29 @@ enum Theme {
     static let press = Animation.easeOut(duration: 0.12)
 }
 
+extension Color {
+    /// `"E8483F"` → a colour. Used for the identity colours carried by presets,
+    /// which are stored as strings so the model needs no UI framework.
+    init(hex: String) {
+        var value: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&value)
+        self.init(.sRGB,
+                  red: Double((value >> 16) & 0xFF) / 255,
+                  green: Double((value >> 8) & 0xFF) / 255,
+                  blue: Double(value & 0xFF) / 255,
+                  opacity: 1)
+    }
+
+    /// A stable colour for something the user named, so their own presets are
+    /// as distinguishable as the built-in ones.
+    static func identity(for text: String) -> Color {
+        let palette = ["E8483F", "2F7BE8", "7A44D6", "E07B1E", "1D9E6B", "D6A314", "C7398E", "1F9AA8"]
+        var hash: UInt64 = 5381
+        for byte in text.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
+        return Color(hex: palette[Int(hash % UInt64(palette.count))])
+    }
+}
+
 // MARK: - Surfaces
 
 /// A part lifted off the ground: light catches the top-left, a soft shadow

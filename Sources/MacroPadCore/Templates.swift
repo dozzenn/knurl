@@ -21,6 +21,10 @@ public struct MacroTemplate: Identifiable, Sendable {
     public let summary: String
     public let category: String
     public let icon: String
+    /// A colour identity, so a wall of cards reads as distinct objects rather
+    /// than as one grey list. Stored as a hex string to keep the model free of
+    /// any UI framework.
+    public let tint: String
     /// Filled into buttons 1, 2, 3 … in order.
     public let buttons: [Step]
     /// Knob actions, in the order left (counter-clockwise), press, right.
@@ -29,12 +33,14 @@ public struct MacroTemplate: Identifiable, Sendable {
     public let note: String?
 
     public init(id: String, name: String, summary: String, category: String, icon: String,
+                tint: String = "8A8A8F",
                 buttons: [Step], knob: [Step?] = [nil, nil, nil], note: String? = nil) {
         self.id = id
         self.name = name
         self.summary = summary
         self.category = category
         self.icon = icon
+        self.tint = tint
         self.buttons = buttons
         self.knob = knob
         self.note = note
@@ -100,6 +106,7 @@ public enum TemplateLibrary {
             summary: "Skip tracks with the keys, volume on the knob",
             category: "Media",
             icon: "music.note",
+            tint: "E8483F",
             buttons: [
                 .init("Previous track", m("Previous track")),
                 .init("Play / Pause", m("Play / Pause")),
@@ -118,6 +125,7 @@ public enum TemplateLibrary {
             summary: "The three you reach for most, plus undo on the knob",
             category: "Editing",
             icon: "doc.on.clipboard",
+            tint: "2F7BE8",
             buttons: [
                 .init("Cut", k(U.x, cmd)),
                 .init("Copy", k(U.c, cmd)),
@@ -136,6 +144,7 @@ public enum TemplateLibrary {
             summary: "Undo and redo on the keys, zoom on the knob",
             category: "Creative",
             icon: "paintbrush.pointed",
+            tint: "7A44D6",
             buttons: [
                 .init("Undo", k(U.z, cmd)),
                 .init("Redo", k(U.z, [cmd, shift])),
@@ -155,6 +164,7 @@ public enum TemplateLibrary {
             summary: "Cut and mark on the keys, scrub the timeline with the knob",
             category: "Creative",
             icon: "scissors",
+            tint: "E07B1E",
             buttons: [
                 .init("Split clip", k(U.b, cmd)),
                 .init("Mark in", k(U.i)),
@@ -174,6 +184,7 @@ public enum TemplateLibrary {
             summary: "Grab a region, a window, or the whole screen",
             category: "System",
             icon: "camera.viewfinder",
+            tint: "1D9E6B",
             buttons: [
                 .init("Capture region", k(U.four, [cmd, shift])),
                 .init("Capture options", k(U.five, [cmd, shift])),
@@ -192,6 +203,7 @@ public enum TemplateLibrary {
             summary: "New and close on the keys, walk the tabs with the knob",
             category: "Productivity",
             icon: "safari",
+            tint: "D6A314",
             buttons: [
                 .init("New tab", k(U.t, cmd)),
                 .init("Reopen closed tab", k(U.t, [cmd, shift])),

@@ -323,6 +323,7 @@ struct PresetsSection: View {
                                         summary: preset.summary.isEmpty
                                         ? "\(preset.profile.bindings.count) keys saved" : preset.summary,
                                         icon: "bookmark.fill",
+                                        tint: .identity(for: preset.name),
                                         lines: [],
                                         note: nil,
                                         onUse: { model.apply(preset) },
@@ -343,6 +344,7 @@ struct PresetsSection: View {
                             SetCard(title: template.name,
                                     summary: template.summary,
                                     icon: template.icon,
+                                    tint: Color(hex: template.tint),
                                     lines: lines(for: template),
                                     note: template.note,
                                     onUse: { model.apply(template) },
@@ -371,6 +373,7 @@ private struct SetCard: View {
     let title: String
     let summary: String
     let icon: String
+    let tint: Color
     let lines: [(String, String)]
     let note: String?
     let onUse: () -> Void
@@ -378,12 +381,27 @@ private struct SetCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // A colour bar across the top: a wall of these should read as a set
+            // of distinct objects, not one grey list.
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(LinearGradient(colors: [tint, tint.opacity(0.55)],
+                                     startPoint: .leading, endPoint: .trailing))
+                .frame(height: 5)
+                .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.28), lineWidth: 0.75))
+                .padding(.bottom, 11)
+
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.textOnWell)
+                    .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
-                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.well))
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(LinearGradient(colors: [tint.opacity(0.92), tint],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing)))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.30), lineWidth: 1))
+                    .shadow(color: tint.opacity(0.45), radius: 4, y: 1)
                 Text(title)
                     .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Theme.text)

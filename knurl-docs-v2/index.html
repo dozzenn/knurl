@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A native macOS app for configuring cheap USB macro keypads. Three wire protocols, one of them reverse engineered. Free and open source.">
+<link rel="canonical" href="https://knurl.site/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%23141517%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%228.5%22%20fill%3D%22none%22%20stroke%3D%22%23E7B100%22%20stroke-width%3D%222.5%22%2F%3E%3Crect%20x%3D%2214.8%22%20y%3D%224%22%20width%3D%222.4%22%20height%3D%225.4%22%20rx%3D%221.2%22%20fill%3D%22%23E7B100%22%2F%3E%3C%2Fsvg%3E">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://knurl.site/">
+<meta property="og:site_name" content="Knurl">
+<meta property="og:title" content="Knurl">
+<meta property="og:description" content="A native macOS app for configuring cheap USB macro keypads. Three wire protocols, one of them reverse engineered. Free and open source.">
+<meta property="og:image" content="https://knurl.site/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Knurl">
+<meta name="twitter:description" content="A native macOS app for configuring cheap USB macro keypads. Three wire protocols, one of them reverse engineered. Free and open source.">
+<meta name="theme-color" content="#141517">
+<title>Knurl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Silkscreen:wght@400;700&display=swap">
+<style>
+:root{
+  --void:#0D0E10; --ground:#141517; --raised:#191B1E; --panel:#1E2126; --panel-hi:#24272C;
+  --line:#292D33; --line-hi:#3B4048;
+  --ink:#E8E8E5; --muted:#8B9097; --dim:#5E646B;
+  --lamp:#E7B100; --lamp-hi:#FFC93A;
+  --px:"Silkscreen","Courier New",monospace;
+  --sans:"Geist",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --maxw:1200px;
+  --pad:clamp(20px,4vw,40px);
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.62;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+body::before{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(to right,var(--line) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--line) 1px,transparent 1px),
+    linear-gradient(to right,var(--line-hi) 1px,transparent 1px);
+  background-size:26px 26px, 26px 26px, 130px 130px;
+  opacity:.30;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 44%,rgba(0,0,0,.28) 100%);
+  mask-image:linear-gradient(to bottom,#000 0,#000 44%,rgba(0,0,0,.28) 100%);
+}
+.wrap{position:relative; z-index:1; max-width:var(--maxw); margin:0 auto; padding:0 var(--pad)}
+a{color:inherit}
+
+/* ---- shared ---- */
+.px{font-family:var(--px); font-size:10px; line-height:1; letter-spacing:.06em; text-transform:uppercase}
+.eyebrow{display:flex; align-items:center; gap:9px; color:var(--dim)}
+.eyebrow .px{color:var(--muted)}
+.lamp{width:6px; height:6px; border-radius:50%; flex:none; background:var(--lamp); box-shadow:0 0 7px var(--lamp)}
+.hair{height:1px; background:var(--line); border:0; margin:0}
+
+h1,h2,h3{margin:0; font-weight:600; letter-spacing:-.018em; text-wrap:balance}
+h1{font-size:clamp(34px,5.4vw,62px); line-height:1.04; letter-spacing:-.032em}
+h2{font-size:clamp(25px,3vw,36px); line-height:1.12}
+h3{font-size:17px; letter-spacing:-.008em}
+p{margin:0}
+
+/* ---- top rail ---- */
+.rail{
+  position:relative; z-index:2; border-bottom:1px solid var(--line);
+  background:linear-gradient(to bottom,var(--raised),var(--ground));
+}
+.rail .wrap{display:flex; align-items:center; justify-content:space-between; gap:20px; height:58px}
+.rail svg{height:15px; width:auto; display:block}
+.rail svg circle{fill:var(--ink)}
+.rail-meta{display:flex; align-items:center; gap:18px; color:var(--dim)}
+.rail-meta a{text-decoration:none}
+.rail-meta a:hover{color:var(--ink)}
+
+/* ---- hero ---- */
+.hero{padding:clamp(56px,9vw,104px) 0 0}
+.hero .eyebrow{margin-bottom:26px}
+.hero h1{max-width:15ch; margin-bottom:24px}
+.hero .lede{font-size:clamp(16.5px,1.6vw,19px); color:var(--muted); max-width:56ch; margin-bottom:36px}
+.hero .lede b{color:var(--ink); font-weight:500}
+
+.cta{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:44px}
+.btn{
+  font-family:var(--mono); font-size:12.5px; font-weight:500; letter-spacing:.04em; text-transform:uppercase;
+  text-decoration:none; padding:13px 22px; border-radius:4px; display:inline-flex; align-items:center; gap:10px;
+  border:1px solid var(--lamp); color:var(--void); background:var(--lamp);
+  transition:background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+.btn:hover{background:var(--lamp-hi); border-color:var(--lamp-hi); transform:translateY(-1px)}
+.btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-hi)}
+.btn.ghost:hover{background:var(--panel); border-color:var(--muted); color:var(--ink)}
+.btn:focus-visible,.plate button:focus-visible{outline:2px solid var(--lamp-hi); outline-offset:3px}
+
+.readout{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr));
+  gap:1px; border:1px solid var(--line); border-radius:5px; background:var(--line); overflow:hidden;
+}
+.readout div{padding:13px 16px 15px; background:var(--raised)}
+.readout dt{color:var(--dim); margin:0 0 7px}
+.readout dd{margin:0; font-family:var(--mono); font-size:13.5px; color:var(--ink); font-variant-numeric:tabular-nums}
+
+/* ---- screenshot plates ---- */
+.shot{
+  display:block; width:100%; padding:0; border:1px solid var(--line-hi); border-radius:9px;
+  background:var(--panel); overflow:hidden; cursor:zoom-in;
+  box-shadow:0 24px 60px -28px rgba(0,0,0,.9);
+  transition:border-color .18s ease, transform .18s ease;
+}
+.shot:hover{border-color:var(--muted); transform:translateY(-2px)}
+.shot img{display:block; width:100%; height:auto}
+.hero-shot{margin-top:clamp(44px,7vw,76px)}
+
+section{padding:clamp(64px,9vw,112px) 0 0}
+.sec-head{margin-bottom:32px; max-width:62ch}
+.sec-head h2{margin:12px 0 10px}
+.sec-head p{color:var(--muted)}
+
+.plates{display:flex; flex-direction:column; gap:clamp(52px,7vw,84px)}
+.cap{display:grid; grid-template-columns:minmax(0,13em) minmax(0,1fr); gap:10px 44px; margin-top:22px}
+.cap h3{margin:4px 0 0}
+.cap p{color:var(--muted); font-size:15px; max-width:60ch}
+code{font-family:var(--mono); font-size:.87em; background:var(--panel); border:1px solid var(--line);
+  padding:2px 6px; border-radius:3px; color:var(--ink)}
+
+.pair{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:26px}
+.pair figure{margin:0}
+.pair figcaption{margin-top:14px; color:var(--muted); font-size:14.5px}
+.pair figcaption b{display:block; color:var(--ink); font-weight:500; margin-bottom:3px}
+
+/* ---- spec sheet ---- */
+.sheet{border-top:1px solid var(--line)}
+.sheet .row{
+  display:grid; grid-template-columns:minmax(0,15em) minmax(0,1fr); gap:8px 44px;
+  padding:22px 4px; border-bottom:1px solid var(--line); align-items:start;
+}
+.sheet .row:hover{background:rgba(255,255,255,.014)}
+.sheet .key{display:flex; align-items:center; gap:9px; color:var(--muted); padding-top:3px}
+.sheet h3{margin:0 0 5px}
+.sheet p{color:var(--muted); font-size:15px; max-width:62ch}
+
+/* ---- steps ---- */
+.steps{display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); margin:0; padding:0;
+  gap:1px; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--line)}
+.steps li{list-style:none; padding:24px 22px 26px; background:var(--raised)}
+.steps .n{display:block; color:var(--lamp); margin-bottom:14px}
+.steps h3{margin:0 0 6px}
+.steps p{color:var(--muted); font-size:14.5px}
+
+/* ---- data wells ---- */
+.well{background:var(--void); border:1px solid var(--line); border-radius:8px; overflow-x:auto}
+table{border-collapse:collapse; width:100%; min-width:580px}
+th,td{text-align:left; padding:13px 20px; border-bottom:1px solid var(--line); vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+th{color:var(--dim); font-family:var(--px); font-size:10px; font-weight:400; letter-spacing:.06em;
+  text-transform:uppercase; border-bottom-color:var(--line-hi)}
+td.frame{font-family:var(--mono); font-size:13px; white-space:nowrap; color:var(--lamp)}
+td.vid{font-family:var(--mono); font-size:13px; white-space:nowrap; color:var(--ink)}
+td.desc{font-size:14.5px; color:var(--muted)}
+td.desc b{color:var(--ink); font-weight:500}
+
+.types{display:grid; grid-template-columns:repeat(auto-fit,minmax(198px,1fr)); margin-top:18px;
+  gap:1px; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--line)}
+.types div{padding:14px 17px; background:var(--raised)}
+.types b{display:block; font-family:var(--mono); font-size:13px; color:var(--lamp); font-weight:500; margin-bottom:3px}
+.types span{font-size:13.5px; color:var(--muted)}
+.warn{margin-top:20px; padding:16px 20px; border:1px solid var(--line); border-left:2px solid var(--lamp);
+  border-radius:0 6px 6px 0; background:var(--raised); font-size:14.5px; color:var(--muted)}
+.warn b{color:var(--ink); font-weight:600}
+
+/* ---- questions ---- */
+.qa{display:grid; grid-template-columns:repeat(auto-fit,minmax(302px,1fr)); gap:32px 48px}
+.qa h3{margin:0 0 7px}
+.qa p{color:var(--muted); font-size:14.5px}
+
+/* ---- footer ---- */
+footer{margin-top:clamp(72px,10vw,120px); border-top:1px solid var(--line); background:var(--raised)}
+footer .wrap{display:flex; flex-wrap:wrap; gap:18px 34px; align-items:center; justify-content:space-between;
+  padding-top:30px; padding-bottom:34px}
+footer svg{height:13px; width:auto; display:block}
+footer svg circle{fill:var(--dim)}
+.flinks{display:flex; flex-wrap:wrap; gap:16px 26px; color:var(--dim)}
+.flinks a{text-decoration:none}
+.flinks a:hover{color:var(--ink)}
+
+/* ---- lightbox ---- */
+#box{position:fixed; inset:0; z-index:60; background:rgba(8,9,10,.94); display:flex; align-items:center;
+  justify-content:center; padding:26px; cursor:zoom-out}
+#box img{max-width:100%; max-height:100%; border-radius:6px; border:1px solid var(--line-hi)}
+
+@media (max-width:760px){
+  .cap{grid-template-columns:1fr; gap:6px}
+  .sheet .row{grid-template-columns:1fr; gap:6px}
+  .sheet .key{padding-top:0}
+  .rail-meta span.hide-s{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important; animation:none!important}
+  .wm circle{opacity:1!important}
+}
+.wm circle{opacity:0; animation:dot .5s ease forwards}
+@keyframes dot{to{opacity:1}}
+</style>
+</head>
+<body>
+
+
+<div class="rail">
+  <div class="wrap">
+    <svg class="wm" data-word="KNURL" viewBox="0 0 29 7" role="img" aria-label="Knurl"></svg>
+    <div class="rail-meta px">
+      <span class="hide-s">v1.0.0</span>
+      <span class="hide-s">GPL-3.0</span>
+      <a href="https://github.com/dozzenn/knurl">Source</a>
+      <a href="https://github.com/dozzenn/knurl/releases">Download</a>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow"><span class="lamp"></span><span class="px">macOS · USB HID · free and open source</span></div>
+  <h1>Configure cheap USB macro keypads from macOS</h1>
+  <p class="lede">The pads with a few keys and a knob ship with software that only runs on Windows, a configurator that only runs in Chrome, or nothing at all. <b>Knurl is the Mac side of them.</b> Three wire protocols, one of them reverse engineered here and documented down to the byte.</p>
+
+  <div class="cta">
+    <a class="btn" href="https://github.com/dozzenn/knurl/releases">Download for macOS</a>
+    <a class="btn ghost" href="https://github.com/dozzenn/knurl">Read the source</a>
+  </div>
+
+  <dl class="readout">
+    <div><dt class="px">Version</dt><dd>1.0.0</dd></div>
+    <div><dt class="px">Size</dt><dd>1.0 MB</dd></div>
+    <div><dt class="px">Requires</dt><dd>macOS 13+</dd></div>
+    <div><dt class="px">Arch</dt><dd>Apple Silicon</dd></div>
+    <div><dt class="px">Protocols</dt><dd>3</dd></div>
+    <div><dt class="px">Network</dt><dd>None</dd></div>
+  </dl>
+
+  <button class="shot hero-shot" data-full="img/06-keys-dark.jpg" aria-label="Expand the Knurl window">
+    <img src="img/06-keys-dark.jpg" alt="The Knurl window. A SIDE-KEYBOARD is connected, three keys are mapped to Previous track, Play Pause and Next track, and the inspector shows the media key list for key 2.">
+  </button>
+</header>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">What it does</span></div>
+    <h2>Everything the pad can hold, and nothing it can't</h2>
+    <p>Knurl reads the key table off the hardware whenever it connects, so the window can never show you something the keypad isn't actually carrying.</p>
+  </div>
+  <div class="sheet">
+    <div class="row">
+      <div class="key px">Keys and knob</div>
+      <div><h3>Every button, and all three knob actions</h3><p>Turn left, press and turn right each take a key sequence, a media key or a mouse action. Record a shortcut live, or pick from the list for the keys a Mac keyboard cannot physically send: F13 to F24, Print Screen, Num Lock, the numeric keypad.</p></div>
+    </div>
+    <div class="row">
+      <div class="key px">Per app</div>
+      <div><h3>The pad follows whichever app is in front</h3><p>Global is the fallback, and every app you add holds its own key set. Bring Final Cut forward and its keys are written to the pad. A set already on the device is skipped, so switching costs nothing.</p></div>
+    </div>
+    <div class="row">
+      <div class="key px">Templates</div>
+      <div><h3>Fill the whole pad in one move</h3><p>Written against slots rather than a specific pad, so the same template lands sensibly on three keys or on twelve, and shortcuts resolve against your keyboard layout instead of assuming a US one.</p></div>
+    </div>
+    <div class="row">
+      <div class="key px">Backlight</div>
+      <div><h3>Read off the keypad, written back live</h3><p>Effect, speed and colour come off the device on connect and go back to it as you make changes. No save step, and nothing cached that could drift out of sync.</p></div>
+    </div>
+    <div class="row">
+      <div class="key px">Storage</div>
+      <div><h3>Mappings live on the pad, not on your Mac</h3><p>Everything is written to the keypad's own flash. It survives unplugging and follows the pad to any machine you carry it to, Windows included.</p></div>
+    </div>
+    <div class="row">
+      <div class="key px">Transparency</div>
+      <div><h3>A live log of the bytes on the wire</h3><p>Every frame sent and received, in the window. It is how the third protocol got decoded, and it is still there so you can watch what the app does to your hardware.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">The app</span></div>
+    <h2>A control panel, not a settings sheet</h2>
+    <p>Parts lifted off a neutral ground, dark wells for anything holding data, monospaced labels in small caps, indicator lamps, and readouts plotted as dot fields because macOS ships no pixel face.</p>
+  </div>
+
+  <div class="plates">
+    <figure style="margin:0">
+      <button class="shot" data-full="img/02-apps.jpg" aria-label="Expand the Apps panel"><img src="img/02-apps.jpg" alt="The Apps panel listing three key sets: Global, Figma, and Final Cut Pro Creator Studio, the last marked as on the keypad."></button>
+      <figcaption class="cap">
+        <div><div class="eyebrow"><span class="lamp"></span><span class="px">Apps</span></div><h3>Key sets that switch themselves</h3></div>
+        <p>Turn on following the front app and the keypad rewrites itself as you move between programs. Apps without their own keys fall back to Global, and a scope already on the device is left alone.</p>
+      </figcaption>
+    </figure>
+
+    <figure style="margin:0">
+      <button class="shot" data-full="img/03-presets.jpg" aria-label="Expand the Presets panel"><img src="img/03-presets.jpg" alt="The Presets panel showing six template cards: music control, cut copy paste, design undo and zoom, video editing, screenshots and browser tabs."></button>
+      <figcaption class="cap">
+        <div><div class="eyebrow"><span class="lamp"></span><span class="px">Presets</span></div><h3>Six ways to fill a pad</h3></div>
+        <p>Music, clipboard, design, video editing, screenshots and browser tabs. Each card lists exactly what it will put on every key before you commit, and the lit one is the set the keypad is holding right now.</p>
+      </figcaption>
+    </figure>
+
+    <figure style="margin:0">
+      <button class="shot" data-full="img/04-backlight.jpg" aria-label="Expand the Backlight panel"><img src="img/04-backlight.jpg" alt="The Backlight panel with five effects, breathing selected in blue, a speed slider and a hue strip."></button>
+      <figcaption class="cap">
+        <div><div class="eyebrow"><span class="lamp"></span><span class="px">Backlight</span></div><h3>Effects the firmware actually runs</h3></div>
+        <p>Off, solid, breathing, blink and tide. Speed goes to four rather than five because the firmware accepts a five and then behaves erratically, and tide always runs the palette, so it is given no colour control.</p>
+      </figcaption>
+    </figure>
+
+    <figure style="margin:0">
+      <button class="shot" data-full="img/05-general-hid-log.jpg" aria-label="Expand the General panel and HID log"><img src="img/05-general-hid-log.jpg" alt="The General panel with startup, appearance and preset controls, and below them a HID traffic log showing raw frames."></button>
+      <figcaption class="cap">
+        <div><div class="eyebrow"><span class="lamp"></span><span class="px">General</span></div><h3>Settings, and the wire underneath them</h3></div>
+        <p>Every switch the app has sits in one window rather than behind a separate settings shortcut. Underneath, the HID log: <code>06 08 3A</code> reads a block of the key table, <code>06 0A</code> reads the backlight.</p>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">Two cases</span></div>
+    <h2>Light is the panel in pale plastic. Dark is the same instrument in a dark case.</h2>
+  </div>
+  <div class="pair">
+    <figure>
+      <button class="shot" data-full="img/01-keys-light.jpg" aria-label="Expand the light theme"><img src="img/01-keys-light.jpg" alt="Knurl in its light theme, a pale plastic control panel."></button>
+      <figcaption><b>Light</b>Pale plastic, lit from the top left.</figcaption>
+    </figure>
+    <figure>
+      <button class="shot" data-full="img/06-keys-dark.jpg" aria-label="Expand the dark theme"><img src="img/06-keys-dark.jpg" alt="Knurl in its dark theme, the same layout in a dark case."></button>
+      <figcaption><b>Dark</b>The same parts, the same lamps, a darker case.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">Getting started</span></div>
+    <h2>Plugged in to mapped, in three moves</h2>
+  </div>
+  <ol class="steps">
+    <li>
+      <span class="n px">Step 01</span>
+      <h3>The pad finds itself</h3>
+      <p>The device menu picks it up on its own. A green dot means it is connected, and Knurl has already read the key table off the hardware.</p>
+    </li>
+    <li>
+      <span class="n px">Step 02</span>
+      <h3>Pick a control</h3>
+      <p>Click a key in the pad view, or one of the knob's three segments. Record a shortcut live, or choose a media key from the list.</p>
+    </li>
+    <li>
+      <span class="n px">Step 03</span>
+      <h3>Save to keypad</h3>
+      <p>The mapping goes into the pad's own flash. Unplug it, move it to another machine, and it is still carrying what you set.</p>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">Protocol · WebHub (SDCX / Huali)</span></div>
+    <h2>The third protocol, decoded here</h2>
+    <p>Two of the three wire formats are ported from rOzzy1987/MacroPad. This one, used by the pads whose vendor configures them through a WebHID page, was reverse engineered for Knurl and verified against the hardware: reading the key table returned exactly the Ctrl+A those keys type, and a write read back byte for byte. Frames are 64 bytes on report id 0, and byte 0 is always <code>06</code>.</p>
+  </div>
+  <div class="well">
+    <table>
+      <thead><tr><th scope="col">Frame</th><th scope="col">Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="frame">06 05</td><td class="desc">Read device info. Replies <b>AA 05 &lt;len&gt;</b> with pid, firmware, profile and layer counts</td></tr>
+        <tr><td class="frame">06 08 3A &lt;offLo&gt; &lt;offHi&gt; 00 &lt;layer&gt;</td><td class="desc">Read 56 bytes of the key table</td></tr>
+        <tr><td class="frame">06 10 07 &lt;off&gt; 00 &lt;layer&gt; 00 &lt;type&gt; &lt;c1&gt; &lt;c2&gt; &lt;c3&gt;</td><td class="desc">Write one key, at offset <b>4 × keyIndex</b></td></tr>
+        <tr><td class="frame">06 09 &lt;len&gt; &lt;off&gt; 00 &lt;layer&gt; 00</td><td class="desc">Write a block of entries</td></tr>
+        <tr><td class="frame">06 0A · 06 0B</td><td class="desc">Read and write the backlight block: effect, speed, direction, hue</td></tr>
+        <tr><td class="frame">06 FB &lt;n&gt;</td><td class="desc">Select a stored profile</td></tr>
+        <tr><td class="frame">06 0F FF</td><td class="desc">Factory reset</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="types">
+    <div><b>0x13</b><span>disabled</span></div>
+    <div><b>0x20</b><span>standard key, modifier mask then usage</span></div>
+    <div><b>0x30</b><span>consumer key, usage little endian</span></div>
+    <div><b>0x11</b><span>mouse move</span></div>
+    <div><b>0x60</b><span>macro</span></div>
+    <div><b>0x80</b><span>open a website</span></div>
+  </div>
+  <p class="warn"><b>Subcommand 0x5A drops the device into its bootloader.</b> Which is why blind command sweeping is a bad way to explore this family, and why the frame format is written down here rather than left for the next person to rediscover.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">Hardware</span></div>
+    <h2>Pads it already knows</h2>
+    <p>Anything else is still found automatically. Knurl looks for an interface on a vendor usage page, 0xFF00 or higher, carrying reports of 64 bytes, on a device that also exposes a keyboard interface. Pads with only keyboard interfaces are configured some other way and none of this reaches them.</p>
+  </div>
+  <div class="well">
+    <table>
+      <thead><tr><th scope="col">VID : PID</th><th scope="col">Interface</th><th scope="col">Protocol</th></tr></thead>
+      <tbody>
+        <tr><td class="vid">1189 : 8840</td><td class="vid">1</td><td class="desc">Extended</td></tr>
+        <tr><td class="vid">1189 : 8890</td><td class="vid">1</td><td class="desc">Legacy</td></tr>
+        <tr><td class="vid">1189 : 8830 to 8833</td><td class="vid">0</td><td class="desc">Extended</td></tr>
+        <tr><td class="vid">1189 : 8810</td><td class="vid">0</td><td class="desc">Extended</td></tr>
+        <tr><td class="vid">6D7B : DCFA</td><td class="vid">2</td><td class="desc">WebHub. <b>SDINNOVATION SIDE-KEYBOARD</b>, the pad in these screenshots</td></tr>
+        <tr><td class="vid">6D7C : DCFB · 6D7D : DCFC · 6D7E : DCFD · 6D7F : DCFE · 68BD : DCFC</td><td class="vid">2</td><td class="desc">WebHub</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow"><span class="lamp"></span><span class="px">Questions</span></div>
+    <h2>Things people ask</h2>
+  </div>
+  <div class="qa">
+    <div>
+      <h3>macOS says the app is damaged.</h3>
+      <p>It isn't. Knurl isn't signed with an Apple Developer ID, which needs a paid account, and that is the message macOS shows for anything whose signature it cannot check. Right click the app, choose Open, then Open again. Once. If it still refuses, run <code>xattr -dr com.apple.quarantine /Applications/Knurl.app</code>.</p>
+    </div>
+    <div>
+      <h3>My keypad isn't detected.</h3>
+      <p>Run <code>knurl-probe interfaces</code> from a source checkout; it lists every HID interface on the machine. If yours has one on a vendor usage page carrying reports of 64 bytes, open an issue with that output and it can be added.</p>
+    </div>
+    <div>
+      <h3>Does it run on Intel Macs?</h3>
+      <p>The release build is Apple Silicon only. Building from source works on Intel, and the Xcode command line tools are the only requirement.</p>
+    </div>
+    <div>
+      <h3>Is it safe to let it write to the keypad?</h3>
+      <p>It writes to the key table and the backlight block, and reads back what it wrote. It never touches firmware. The one command that would is documented above precisely so that nothing sends it by accident.</p>
+    </div>
+    <div>
+      <h3>Does it send anything anywhere?</h3>
+      <p>No. Knurl makes no network calls at all. There is no account, no telemetry and no update check. It talks to the keypad over USB and to nothing else.</p>
+    </div>
+    <div>
+      <h3>Who made this?</h3>
+      <p>A graphic designer, not a developer, with Claude Code. The protocol work is verified against real hardware in both directions, and the source is open so that claim is checkable rather than something you have to take on trust.</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <svg class="wm" data-word="KNURL" viewBox="0 0 29 7" role="img" aria-label="Knurl"></svg>
+    <div class="flinks px">
+      <a href="https://github.com/dozzenn/knurl">GitHub</a>
+      <a href="https://github.com/dozzenn/knurl/releases">Releases</a>
+      <span>GPL-3.0</span>
+      <span>No network · no telemetry · no account</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var G={
+    K:["10001","10010","10100","11000","10100","10010","10001"],
+    N:["10001","11001","11001","10101","10011","10011","10001"],
+    U:["10001","10001","10001","10001","10001","10001","01110"],
+    R:["11110","10001","10001","11110","10100","10010","10001"],
+    L:["10000","10000","10000","10000","10000","10000","11111"]
+  };
+  document.querySelectorAll("svg.wm").forEach(function(svg){
+    var word=svg.dataset.word||"KNURL", x=0, out="", i=0;
+    for(var w=0;w<word.length;w++){
+      var g=G[word[w]];
+      for(var c=0;c<5;c++) for(var r=0;r<7;r++){
+        if(g[r][c]==="1"){
+          out+='<circle cx="'+(x+c+.5)+'" cy="'+(r+.5)+'" r="0.36" style="animation-delay:'+(i*7)+'ms"/>';
+          i++;
+        }
+      }
+      x+=6;
+    }
+    svg.innerHTML=out;
+  });
+})();
+
+(function(){
+  var box=null;
+  function close(){ if(box){ box.remove(); box=null; document.removeEventListener("keydown",esc); } }
+  function esc(e){ if(e.key==="Escape") close(); }
+  document.querySelectorAll(".shot").forEach(function(b){
+    b.addEventListener("click",function(){
+      close();
+      box=document.createElement("div"); box.id="box";
+      var im=document.createElement("img");
+      im.src=b.dataset.full; im.alt=b.querySelector("img").alt;
+      box.appendChild(im);
+      box.addEventListener("click",close);
+      document.body.appendChild(box);
+      document.addEventListener("keydown",esc);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

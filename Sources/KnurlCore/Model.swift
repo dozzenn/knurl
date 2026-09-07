@@ -363,6 +363,10 @@ public enum ControlBinding: Codable, Hashable, Sendable {
     case keys(sequence: [KeyStroke], delay: UInt16)
     case media(MediaKey)
     case mouse(button: MouseButton, modifiers: Modifier)
+    /// Opens an app by name. Stored as what it means rather than as the
+    /// keystrokes it becomes, so the editor can say "Open Spotify" instead of
+    /// showing eight letters and leaving the user to recognise them.
+    case launch(app: String)
 
     public var summary: String {
         switch self {
@@ -373,6 +377,7 @@ public enum ControlBinding: Codable, Hashable, Sendable {
         case .media(let m): return m.name
         case .mouse(let b, let mods):
             return mods.isEmpty ? b.displayName : "\(mods.symbols)\(b.displayName)"
+        case .launch(let app): return "Open \(app)"
         }
     }
 

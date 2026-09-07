@@ -41,6 +41,10 @@ public extension ReportComposer {
             return media(action: action, layer: layer, key: key)
         case .mouse(let button, let mods):
             return mouse(action: action, layer: layer, button: button, modifiers: mods)
+        case .launch:
+            // Becomes a macro, which needs a slot in the shared table and so is
+            // written a level up, where the whole profile is in view.
+            return []
         }
     }
 }

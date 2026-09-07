@@ -22,9 +22,10 @@ struct InspectorPane: View {
                         }
                     } else {
                         switch model.editorTab {
-                        case .keys:  KeysEditor()
-                        case .media: MediaEditor()
-                        case .mouse: MouseEditor()
+                        case .keys:   KeysEditor()
+                        case .media:  MediaEditor()
+                        case .launch: LaunchEditor()
+                        case .mouse:  MouseEditor()
                         case .led:   Panel(title: "Backlight") {
                             Text("The backlight is a whole-keypad setting — it lives in the Backlight section.")
                                 .font(Theme.rowDetail)
@@ -62,10 +63,12 @@ struct InspectorPane: View {
                            (KnobPart.right, "↻ Right")])
             }
 
+            // Only what this keypad can be told to do — a tab that cannot be
+            // written is a promise the hardware will not keep.
             SegmentedSwitch(selection: $model.editorTab,
-                            items: [(EditorTab.keys, "Keys"),
-                                    (EditorTab.media, "Media"),
-                                    (EditorTab.mouse, "Mouse")])
+                            items: [EditorTab.keys, .media, .launch, .mouse]
+                                .filter { model.supports($0) }
+                                .map { ($0, $0.title) })
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.vertical, 12)
@@ -352,6 +355,49 @@ struct ModifierRow: View {
                 }
                 .buttonStyle(PressableStyle())
             }
+        }
+    }
+}
+
+// MARK: - Open app
+
+/// Picks an app and stores what it means. The keystrokes that open it are
+/// worked out when the profile is written, not typed in by hand.
+private struct LaunchEditor: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        Panel(title: "Open an app") {
+            HStack(spacing: 11) {
+                if let icon = model.launchAppIcon {
+                    Image(nsImage: icon).resizable().frame(width: 34, height: 34)
+                } else {
+                    Image(systemName: "app.dashed")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Theme.textFaint)
+                        .frame(width: 34, height: 34)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.launchApp.isEmpty ? "No app chosen" : model.launchApp)
+                        .font(Theme.rowTitle)
+                        .foregroundStyle(model.launchApp.isEmpty ? Theme.textFaint : Theme.text)
+                    Text(model.launchApp.isEmpty
+                         ? "Pick one and the key will open it"
+                         : "The key opens \(model.launchApp)")
+                        .font(Theme.rowDetail)
+                        .foregroundStyle(Theme.textFaint)
+                }
+                Spacer(minLength: 8)
+                PanelButton(title: model.launchApp.isEmpty ? "Choose…" : "Change", compact: true) {
+                    model.pickLaunchApp()
+                }
+            }
+
+            Text("The keypad opens it the way you would: Spotlight, the name, Return. It works with Knurl closed, and it needs the app's name to still match what Spotlight finds.")
+                .font(Theme.rowDetail)
+                .foregroundStyle(Theme.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
         }
     }
 }

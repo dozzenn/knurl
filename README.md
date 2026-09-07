@@ -195,8 +195,15 @@ end of the macro in bit 7. A key entry of type `0x60` carries the slot number in
 Knurl rewrites the whole table on every save and hands out slots fresh, so a key
 can never be left pointing at a macro that moved.
 
-Mouse actions are still not implemented for this family; the app says so rather
-than writing a guess into the key table.
+**Open an app** is built on the macro table: the keypad opens Spotlight, types
+the app's name and presses Return, with delays long enough for Spotlight to
+appear and finish searching. It works with Knurl closed, and it depends on the
+app's name still matching what Spotlight finds.
+
+Mouse actions are not implemented for this family. Rather than showing a tab
+that cannot be written, the editor only offers what the connected keypad can
+actually be told to do — the Mouse tab is there for the two protocols where it
+works.
 
 Note that sub-command `0x5A` on this family jumps the device into its bootloader,
 which is why blind command sweeping is a bad way to explore it.

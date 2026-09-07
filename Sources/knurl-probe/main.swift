@@ -292,6 +292,64 @@ case "layout":
         }
     }
 
+case "setmacro":
+    // setmacro <keyIndex> <text…>  — writes a macro that types the text and
+    // points the key at it. For checking the macro format against hardware.
+    guard args.count >= 3, let index = Int(args[1]) else {
+        print("usage: knurl-probe setmacro <keyIndex> <text>"); exit(2)
+    }
+    let text = args.dropFirst(2).joined(separator: " ")
+    let sequence = KeyStroke.typing(text)
+    guard !sequence.isEmpty else { print("nothing typable in \"\(text)\""); exit(1) }
+    let steps = MacroTable.steps(for: sequence)
+    guard let blob = MacroTable.encode([0: steps]) else { print("does not fit"); exit(1) }
+
+    guard let best = transport.bestCandidate else { print("No device."); exit(1) }
+    if case .failure(let e) = transport.open(best) {
+        print("open failed: \(e.localizedDescription)"); exit(1)
+    }
+    print("macro: \(sequence.count) keystrokes, \(steps.count) steps")
+    for report in WebHubComposer.macroTableWrites(blob) {
+        _ = transport.write(report, channel: .output)
+        usleep(15_000)
+    }
+    let composer = WebHubComposer()
+    if let action = WebHubComposer.action(forKeyIndex: index) {
+        for report in composer.macro(action: action, layer: 0, slot: 0) {
+            _ = transport.write(report, channel: .output)
+        }
+    }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+    transport.close()
+    print("key index \(index) now points at macro 0")
+
+case "readmacro":
+    // Reads the macro table back, to confirm what the device kept.
+    guard let best = transport.bestCandidate else { print("No device."); exit(1) }
+    var replies: [[UInt8]] = []
+    transport.onInputReport = { replies.append($0) }
+    if case .failure(let e) = transport.open(best) {
+        print("open failed: \(e.localizedDescription)"); exit(1)
+    }
+    var offset = 0
+    while offset < 256 {
+        _ = transport.write(WebHubComposer.macroTableRequest(blockOffset: offset), channel: .output)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.12))
+        offset += 56
+    }
+    transport.close()
+    var blob: [UInt8] = []
+    for r in replies where r.count > 8 { blob.append(contentsOf: r[8...]) }
+    print("read \(blob.count) bytes")
+    for (slot, steps) in MacroTable.decode(blob).sorted(by: { $0.key < $1.key }) {
+        print("  slot \(slot): \(steps.count) steps")
+        for step in steps.prefix(12) {
+            print(String(format: "     %@ 0x%02X  (%@, delay %d)",
+                         step.action == .down ? "↓" : "↑", step.code,
+                         "\(step.kind)", step.delay))
+        }
+    }
+
 case "access":
     // macOS gates input reports from keyboard-usage devices behind Input
     // Monitoring. Ask the system rather than guessing from silence.

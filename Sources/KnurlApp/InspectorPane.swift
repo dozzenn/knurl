@@ -103,6 +103,17 @@ private struct KeysEditor: View {
                 .padding(.top, 8)
         }
 
+        if model.maxKeystrokes > 1 {
+            Panel(title: "Type some text") {
+                Text("Adds the keys that type this, on your layout. Useful with a shortcut in front of it — ⌘Space, then a name, then Return, opens an app.")
+                    .font(Theme.rowDetail)
+                    .foregroundStyle(Theme.textFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 4)
+                TypeTextRow()
+            }
+        }
+
         Panel(title: "Key your Mac can't type") {
             Text("F13–F24, Print Screen, Num Lock and the numeric keypad have no key on a Mac keyboard, so pick them here instead of recording.")
                 .font(Theme.rowDetail)
@@ -232,6 +243,48 @@ private struct WellCap: View {
                         .strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
             }
         }
+    }
+}
+
+/// Turns a string into the keystrokes that type it here, so a macro can spell
+/// something out without the user recording every letter.
+private struct TypeTextRow: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var text = ""
+
+    private var strokes: [KeyStroke] { KeyStroke.typing(text) }
+    private var room: Int { max(0, model.maxKeystrokes - model.sequence.count) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                TextField("spotify", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(Theme.rowTitle)
+                    .foregroundStyle(Theme.textOnWell)
+                    .padding(.horizontal, 9)
+                    .frame(height: 28)
+                    .well(radius: Theme.radiusSmall)
+                    .onSubmit(add)
+                PanelButton(title: "Add", compact: true, action: add)
+                    .disabled(strokes.isEmpty || room == 0)
+                    .opacity(strokes.isEmpty || room == 0 ? 0.4 : 1)
+            }
+            if !text.isEmpty {
+                Text(strokes.count > room
+                     ? "\(strokes.count) keys — only \(room) will fit"
+                     : "\(strokes.count) keys")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(strokes.count > room ? Theme.lampAlert : Theme.textFaint)
+            }
+        }
+    }
+
+    private func add() {
+        for stroke in strokes.prefix(room) {
+            model.addKey(usage: stroke.usage, modifiers: stroke.modifiers)
+        }
+        text = ""
     }
 }
 

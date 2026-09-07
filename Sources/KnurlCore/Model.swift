@@ -343,6 +343,20 @@ public struct KeyStroke: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+public extension KeyStroke {
+    /// The keystrokes that type a string on the keyboard layout in use.
+    ///
+    /// Characters are resolved to positions, not assumed: a macro that types
+    /// "spotify" has to press whatever keys make those letters here.
+    static func typing(_ text: String) -> [KeyStroke] {
+        text.compactMap { character in
+            guard let resolved = LayoutResolver.resolve(character) else { return nil }
+            return KeyStroke(usage: resolved.usage,
+                             modifiers: resolved.needsShift ? .leftShift : .none)
+        }
+    }
+}
+
 /// What a single control does.
 public enum ControlBinding: Codable, Hashable, Sendable {
     case unset

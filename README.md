@@ -185,9 +185,18 @@ The app reads the key table and the backlight off the keypad whenever it
 connects, so the window shows what the hardware actually holds instead of an
 empty profile.
 
-Not yet implemented for this family: mouse actions and multi-key macros —
-macros live in a separate table addressed by its own commands. The app refuses
-to write those rather than guessing at the encoding.
+Shortcuts longer than one keystroke go in the **macro table**: 4096 bytes read
+with `06 0C` and written with `06 0D`, holding sixteen 16-bit pointers followed
+by the steps they point at. A step is four bytes — `delayLo delayHi flags code`
+— with the kind in the flags' low six bits, press or release in bit 6, and the
+end of the macro in bit 7. A key entry of type `0x60` carries the slot number in
+`code1`. `06 0F 04` clears every macro.
+
+Knurl rewrites the whole table on every save and hands out slots fresh, so a key
+can never be left pointing at a macro that moved.
+
+Mouse actions are still not implemented for this family; the app says so rather
+than writing a guess into the key table.
 
 Note that sub-command `0x5A` on this family jumps the device into its bootloader,
 which is why blind command sweeping is a bad way to explore it.

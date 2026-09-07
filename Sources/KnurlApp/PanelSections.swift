@@ -556,6 +556,9 @@ struct GeneralSection: View {
                     SwitchRow(title: "Menu bar only",
                               detail: "Hide the Dock icon",
                               isOn: $model.hideDockIcon)
+                    SwitchRow(title: "Come forward when a keypad is plugged in",
+                              detail: "Opens the window as soon as one is found",
+                              isOn: $model.raiseOnConnect)
                 }
 
                 Panel(title: "Appearance") {

@@ -227,6 +227,9 @@ final class AppModel: ObservableObject {
             adoptLayoutForSelection()
             setStatus("Connected — \(displayName(for: candidate)), \(activeProtocol.displayName)")
             syncFromDevice()
+            // Only on the automatic path: connecting from the window means the
+            // window is already in front, and raising it again would be noise.
+            if raiseOnConnect { AppDelegate.showMainWindow() }
         }
     }
 
@@ -637,12 +640,45 @@ final class AppModel: ObservableObject {
             return true
         }
 
+        // A shortcut longer than one keystroke cannot live in a key's four
+        // bytes, so it goes in the macro table and the key points at a slot.
+        // Slots are handed out fresh on every write: the table is rewritten
+        // whole, so nothing can be left pointing at a macro that moved.
+        var macros: [Int: [MacroStep]] = [:]
+        var slotFor: [InputAction: Int] = [:]
+        for control in layout.controls {
+            for action in control.actions {
+                guard case .keys(let sequence, _) = source[layer, action], sequence.count > 1 else {
+                    continue
+                }
+                guard slotFor.count < MacroTable.slotCount else {
+                    setStatus("This keypad holds \(MacroTable.slotCount) macros; the rest were left out",
+                              error: true)
+                    break
+                }
+                let slot = slotFor.count
+                slotFor[action] = slot
+                macros[slot] = MacroTable.steps(for: sequence)
+            }
+        }
+
         var reports: [PadReport] = []
+        if !macros.isEmpty {
+            guard let blob = MacroTable.encode(macros) else {
+                setStatus("Those macros are longer than the keypad can store", error: true)
+                return false
+            }
+            reports.append(contentsOf: WebHubComposer.macroTableWrites(blob))
+        }
+
         var written = 0
         for control in layout.controls {
             for action in control.actions {
                 let binding = source[layer, action]
-                if binding.isSet {
+                if let slot = slotFor[action] {
+                    reports.append(contentsOf: webhub.macro(action: action, layer: layer, slot: slot))
+                    written += 1
+                } else if binding.isSet {
                     reports.append(contentsOf: webhub.reports(for: binding, action: action, layer: layer))
                     written += 1
                 } else {
@@ -729,6 +765,13 @@ final class AppModel: ObservableObject {
     /// Which section the window is showing. Held here so the menu bar can send
     /// the user somewhere specific instead of just raising the window.
     @Published var section: PanelSection = .keys
+
+    /// Bring the window forward when a keypad turns up, so plugging one in is
+    /// enough to start working. Off for people who would rather it stayed put.
+    @Published var raiseOnConnect: Bool =
+        UserDefaults.standard.object(forKey: "raiseOnConnect") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(raiseOnConnect, forKey: "raiseOnConnect") }
+    }
 
     // MARK: - Appearance
 

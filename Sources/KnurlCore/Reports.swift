@@ -351,8 +351,46 @@ public struct WebHubComposer: ReportComposer {
         return [writeKey(index: index, layer: layer, type: .disabled, 0, 0, 0)]
     }
 
-    /// How many keystrokes one table entry can hold.
+    /// A table entry holds one keystroke. Longer shortcuts go in the macro
+    /// table and the entry points at them, so this is the limit only for what a
+    /// key can do without one.
     public static let maxKeystrokes = 1
+
+    /// With the macro table, a key can hold a sequence. The cap is what stays
+    /// comfortable to record and read back, not what the table could take.
+    public static let maxMacroKeystrokes = 16
+
+    /// Points a key at a macro slot.
+    public func macro(action: InputAction, layer: UInt8, slot: Int) -> [PadReport] {
+        guard let index = Self.keyIndex(for: action) else { return [] }
+        return [writeKey(index: index, layer: layer, type: .macro, UInt8(slot), 0, 0)]
+    }
+
+    /// Read-only request for a block of the macro table.
+    public static func macroTableRequest(blockOffset: Int, length: Int = 56) -> PadReport {
+        PadReport(reportId: 0, data: [6, 12, UInt8(length),
+                                      UInt8(blockOffset & 0xFF), UInt8((blockOffset >> 8) & 0xFF)])
+    }
+
+    /// The writes that put a macro blob on the device, in the chunk size the
+    /// frame has room for.
+    public static func macroTableWrites(_ blob: [UInt8]) -> [PadReport] {
+        var out: [PadReport] = []
+        var offset = 0
+        while offset < blob.count {
+            let chunk = Array(blob[offset..<min(offset + 59, blob.count)])
+            out.append(PadReport(reportId: 0, data: [6, 13, UInt8(chunk.count),
+                                                     UInt8(offset & 0xFF),
+                                                     UInt8((offset >> 8) & 0xFF)] + chunk))
+            offset += chunk.count
+        }
+        return out
+    }
+
+    /// Clears every macro.
+    public static func macroReset() -> PadReport {
+        PadReport(reportId: 0, data: [6, 15, 4])
+    }
 }
 
 // MARK: - Backlight

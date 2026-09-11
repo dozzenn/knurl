@@ -82,13 +82,15 @@ public enum MacroTable {
     /// The delays are the point: Spotlight has to appear before it can be typed
     /// into, and it has to finish searching before Return means the right
     /// thing. Typing straight through opens whatever was already selected.
-    public static func launchSteps(appName: String) -> [MacroStep] {
+    public static func launchSteps(appName: String,
+                                   openDelay: UInt16 = 450,
+                                   searchDelay: UInt16 = 550) -> [MacroStep] {
         var out = steps(for: KeyStroke(usage: 0x2C, modifiers: .leftGui))   // ⌘Space
         var letters = steps(for: KeyStroke.typing(appName))
-        if !letters.isEmpty { letters[0].delay = 400 }                      // let it open
+        if !letters.isEmpty { letters[0].delay = openDelay }
         out.append(contentsOf: letters)
         var enter = steps(for: KeyStroke(usage: 0x28))                      // Return
-        if !enter.isEmpty { enter[0].delay = 500 }                          // let it search
+        if !enter.isEmpty { enter[0].delay = searchDelay }
         out.append(contentsOf: enter)
         return out
     }

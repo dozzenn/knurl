@@ -122,7 +122,9 @@ private func m(_ name: String) -> ControlBinding {
 
 private enum U {
     static let a: UInt8 = 0x04, b: UInt8 = 0x05, c: UInt8 = 0x06, i: UInt8 = 0x0C
+    static let j: UInt8 = 0x0D, k: UInt8 = 0x0E, l: UInt8 = 0x0F, mKey: UInt8 = 0x10
     static let o: UInt8 = 0x12, r: UInt8 = 0x15, s: UInt8 = 0x16, t: UInt8 = 0x17, v: UInt8 = 0x19
+    static let up: UInt8 = 0x52, down: UInt8 = 0x51
     static let w: UInt8 = 0x1A, x: UInt8 = 0x1B, z: UInt8 = 0x1D
     static let one: UInt8 = 0x1E, three: UInt8 = 0x20, four: UInt8 = 0x21, five: UInt8 = 0x22
     static let zero: UInt8 = 0x27
@@ -214,6 +216,26 @@ public enum TemplateLibrary {
                 .init("Step forward", k(U.right)),
             ],
             note: "Written for Premiere Pro. Resolve and Final Cut use different cut keys — change the first button to match your editor."
+        ),
+
+        MacroTemplate(
+            id: "youtube",
+            name: "Video playback",
+            summary: "Seek with the keys, volume on the knob — YouTube's own shortcuts",
+            category: "Media",
+            icon: "play.rectangle",
+            tint: "C4302B",
+            buttons: [
+                .init("Back 10s", k(U.j)),
+                .init("Play / Pause", k(U.k)),
+                .init("Forward 10s", k(U.l)),
+            ],
+            knob: [
+                .init("Volume down", k(U.down)),
+                .init("Mute", k(U.mKey)),
+                .init("Volume up", k(U.up)),
+            ],
+            note: "These are the player's own keys, so they work wherever the video has focus — YouTube, and anything that copied its shortcuts."
         ),
 
         MacroTemplate(

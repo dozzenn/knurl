@@ -339,8 +339,28 @@ struct ModifierRow: View {
         ("⌃", .leftCtrl), ("⌥", .leftAlt), ("⇧", .leftShift), ("⌘", .leftGui),
     ]
 
+    /// A remapped Caps Lock does not send Caps Lock — it sends all four
+    /// modifiers at once. There is no Hyper key to pick from a list; there is
+    /// only this combination, so it gets a button.
+    private static let hyper: Modifier = [.leftCtrl, .leftAlt, .leftShift, .leftGui]
+    private var isHyper: Bool { modifiers.normalised == Self.hyper }
+
     var body: some View {
         HStack(spacing: 5) {
+            Button {
+                modifiers = isHyper ? .none : Self.hyper
+                onChange?()
+            } label: {
+                Text("HYPER")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .tracking(0.6)
+                    .foregroundStyle(isHyper ? Theme.textOnWell : Theme.textMuted)
+                    .frame(width: 48, height: 25)
+                    .modifier(RecordSurface(on: isHyper))
+            }
+            .buttonStyle(PressableStyle())
+            .help("Control, Option, Shift and Command together — what a remapped Caps Lock sends")
+
             ForEach(items, id: \.0) { symbol, flag in
                 let on = modifiers.contains(flag)
                 Button {
@@ -393,11 +413,22 @@ private struct LaunchEditor: View {
                 }
             }
 
-            Text("The keypad opens it the way you would: Spotlight, the name, Return. It works with Knurl closed, and it needs the app's name to still match what Spotlight finds.")
+            Text("The keypad opens it the way you would: your launcher, the name, Return. It works with Knurl closed, and it needs the name to match what the launcher finds.")
                 .font(Theme.rowDetail)
                 .foregroundStyle(Theme.textFaint)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
+
+            PanelLabel(text: "how long to wait for the launcher", colour: Theme.textFaint)
+                .padding(.top, 12)
+                .padding(.bottom, 2)
+            SegmentedSwitch(selection: $model.launchPace,
+                            items: AppModel.LaunchPace.allCases.map { ($0, $0.title) })
+            Text("Raycast and Spotlight do not take the same time to appear. If the key opens the wrong thing, it is pressing Return before the search has settled — slow it down.")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Theme.textFaint)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
         }
     }
 }

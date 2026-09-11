@@ -195,10 +195,15 @@ end of the macro in bit 7. A key entry of type `0x60` carries the slot number in
 Knurl rewrites the whole table on every save and hands out slots fresh, so a key
 can never be left pointing at a macro that moved.
 
+A **Hyper** button sits with the modifiers. A Caps Lock remapped to Hyper does
+not send Caps Lock — it sends Control, Option, Shift and Command together — so
+there is nothing to pick from a key list, only that combination.
+
 **Open an app** is built on the macro table: the keypad opens Spotlight, types
 the app's name and presses Return, with delays long enough for Spotlight to
 appear and finish searching. It works with Knurl closed, and it depends on the
-app's name still matching what Spotlight finds.
+name still matching what the launcher finds. How long it waits is adjustable,
+because Raycast and Spotlight do not appear at the same speed.
 
 Mouse actions are not implemented for this family. Rather than showing a tab
 that cannot be written, the editor only offers what the connected keypad can

@@ -693,7 +693,9 @@ final class AppModel: ObservableObject {
                 case .keys(let sequence, _) where sequence.count > 1:
                     steps = MacroTable.steps(for: sequence)
                 case .launch(let app):
-                    steps = MacroTable.launchSteps(appName: app)
+                    steps = MacroTable.launchSteps(appName: app,
+                                                   openDelay: launchPace.openDelay,
+                                                   searchDelay: launchPace.searchDelay)
                 default:
                     continue
                 }
@@ -811,6 +813,21 @@ final class AppModel: ObservableObject {
     /// Which section the window is showing. Held here so the menu bar can send
     /// the user somewhere specific instead of just raising the window.
     @Published var section: PanelSection = .keys
+
+    /// How long a macro waits for the launcher to appear and to finish
+    /// searching. Spotlight and Raycast are not the same speed, and neither is
+    /// one machine and another.
+    enum LaunchPace: String, CaseIterable {
+        case quick, normal, patient
+        var title: String { rawValue.capitalized }
+        var openDelay: UInt16 { self == .quick ? 250 : self == .normal ? 450 : 800 }
+        var searchDelay: UInt16 { self == .quick ? 300 : self == .normal ? 550 : 900 }
+    }
+
+    @Published var launchPace: LaunchPace =
+        LaunchPace(rawValue: UserDefaults.standard.string(forKey: "launchPace") ?? "normal") ?? .normal {
+        didSet { UserDefaults.standard.set(launchPace.rawValue, forKey: "launchPace") }
+    }
 
     /// Bring the window forward when a keypad turns up, so plugging one in is
     /// enough to start working. Off for people who would rather it stayed put.

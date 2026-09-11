@@ -86,6 +86,19 @@ blob and only one key entry will appear to wipe the pad.
 This is why press counting was removed rather than shipped as a switch that
 quietly does nothing.
 
+## Open, not finished
+
+**Multi-keystroke macros are written but unproven.** The table reaches the
+device correctly — the blob writes, reads back byte for byte, and the key entry
+points at the right slot — but no macro has ever been seen to run. Single
+keystrokes with modifiers work, including all four at once for Hyper, and that
+is the path everything useful has gone through so far.
+
+Two things are still unchecked: whether the recorder actually builds a sequence
+of more than one keystroke in the editor, and whether the firmware runs a macro
+at all given a key entry whose `code2` and `code3` are zero. Start with the
+first; it is cheaper to test and would explain the symptom on its own.
+
 ## Conventions
 
 - Say what the hardware actually does. Where a control would change nothing —

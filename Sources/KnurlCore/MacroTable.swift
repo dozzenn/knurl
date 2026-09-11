@@ -2,13 +2,18 @@ import Foundation
 
 /// One instruction inside a macro: press or release a code, after a delay.
 public struct MacroStep: Equatable, Sendable {
-    /// Which namespace `code` belongs to. The firmware carries this in the low
-    /// six bits of the flags byte.
+    /// Which namespace `code` belongs to, carried in the low six bits of the
+    /// flags byte.
+    ///
+    /// Keyboard is 3, not 1. The vendor's reader treats anything that is not
+    /// 2, 4 or 5 as a keyboard step, so a wrong value still decodes as one and
+    /// reads back looking correct — while the firmware, which switches on the
+    /// value, does nothing with it.
     public enum Kind: UInt8, Sendable {
-        case keyboard = 1
+        case keyboard = 3
         case mouse = 2
-        case system = 4
-        case consumer = 5
+        case scrollVertical = 4
+        case scrollHorizontal = 5
     }
 
     public enum Action: Sendable { case down, up }
@@ -38,7 +43,9 @@ public struct MacroStep: Equatable, Sendable {
 public enum MacroTable {
     public static let slotCount = 16
     public static let size = 4096
-    private static let headerSize = slotCount * 2
+    /// 64 bytes, not two per slot: the vendor's encoder reserves the whole
+    /// first block and starts step data after it.
+    private static let headerSize = 64
     /// Written into the pointer of a slot that holds nothing. The firmware's
     /// reader treats anything past the table as "no macro".
     private static let emptySlot: UInt16 = 0xFFFF
@@ -109,6 +116,9 @@ public enum MacroTable {
         for slot in 0..<slotCount {
             let pointer: UInt16
             if let steps = macros[slot], !steps.isEmpty {
+                // A pointer whose low byte is zero reads as "no macro", so step
+                // over such an offset rather than writing one.
+                if cursor & 0xFF == 0 { cursor += 4 }
                 guard cursor + steps.count * 4 <= size else { return nil }
                 pointer = UInt16(cursor)
                 for (index, step) in steps.enumerated() {
@@ -144,6 +154,8 @@ public enum MacroTable {
             while cursor + 4 <= blob.count && steps.count <= stepCapacity {
                 let delay = UInt16(blob[cursor]) | (UInt16(blob[cursor + 1]) << 8)
                 let flags = blob[cursor + 2]
+                // Mirrors the vendor's reader: only 2, 4 and 5 mean anything
+                // else; everything remaining is a keyboard step.
                 let kind = MacroStep.Kind(rawValue: flags & 0x3F) ?? .keyboard
                 let action: MacroStep.Action = (flags >> 6) & 1 == 1 ? .down : .up
                 steps.append(MacroStep(delay: delay, kind: kind, action: action,

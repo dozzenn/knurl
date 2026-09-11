@@ -187,9 +187,11 @@ empty profile.
 
 Shortcuts longer than one keystroke go in the **macro table**: 4096 bytes read
 with `06 0C` and written with `06 0D`, holding sixteen 16-bit pointers followed
-by the steps they point at. A step is four bytes — `delayLo delayHi flags code`
-— with the kind in the flags' low six bits, press or release in bit 6, and the
-end of the macro in bit 7. A key entry of type `0x60` carries the slot number in
+by the steps they point at. The header is 64 bytes and step
+data starts after it. A step is four bytes — `delayLo delayHi flags code` — with
+the kind in the flags' low six bits (3 keyboard, 2 mouse, 4 and 5 scroll), press
+or release in bit 6, and the end of the macro in bit 7. A slot whose pointer is
+`FFFF`, or whose low byte is zero, holds nothing. A key entry of type `0x60` carries the slot number in
 `code1`. `06 0F 04` clears every macro.
 
 Knurl rewrites the whole table on every save and hands out slots fresh, so a key

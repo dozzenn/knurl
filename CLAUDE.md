@@ -71,6 +71,13 @@ so reopening has to be handled explicitly — see `AppDelegate`.
 **A `ScrollView` in a menu bar window does not size itself from its content.**
 Give it an explicit height or it collapses.
 
+**The macro table's header is 64 bytes and a keyboard step's kind is 3.**
+Neither is guessable from the reader: it treats anything that is not 2, 4 or 5
+as a keyboard step, so a wrong kind decodes as one and reads back looking
+correct while the firmware does nothing with it. The encoder — `E` in the vendor
+bundle — is the only place both facts appear. When a macro writes and reads back
+cleanly but the key does nothing, suspect a value the reader is lenient about.
+
 **Unsigned builds change identity on every rebuild**, so TCC grants never stick.
 This is why press counting was removed rather than shipped as a switch that
 quietly does nothing.

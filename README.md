@@ -191,7 +191,10 @@ by the steps they point at. The header is 64 bytes and step
 data starts after it. A step is four bytes — `delayLo delayHi flags code` — with
 the kind in the flags' low six bits (3 keyboard, 2 mouse, 4 and 5 scroll), press
 or release in bit 6, and the end of the macro in bit 7. A slot whose pointer is
-`FFFF`, or whose low byte is zero, holds nothing. A key entry of type `0x60` carries the slot number in
+`FFFF`, or whose low byte is zero, holds nothing.
+
+Writing the macro table clears the key table, so the key entries have to be
+written after it — which is what saving does. A key entry of type `0x60` carries the slot number in
 `code1`. `06 0F 04` clears every macro.
 
 Knurl rewrites the whole table on every save and hands out slots fresh, so a key
@@ -200,12 +203,6 @@ can never be left pointing at a macro that moved.
 A **Hyper** button sits with the modifiers. A Caps Lock remapped to Hyper does
 not send Caps Lock — it sends Control, Option, Shift and Command together — so
 there is nothing to pick from a key list, only that combination.
-
-**Open an app** is built on the macro table: the keypad opens Spotlight, types
-the app's name and presses Return, with delays long enough for Spotlight to
-appear and finish searching. It works with Knurl closed, and it depends on the
-name still matching what the launcher finds. How long it waits is adjustable,
-because Raycast and Spotlight do not appear at the same speed.
 
 Mouse actions are not implemented for this family. Rather than showing a tab
 that cannot be written, the editor only offers what the connected keypad can

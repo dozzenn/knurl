@@ -350,45 +350,6 @@ case "readmacro":
         }
     }
 
-case "setlaunch":
-    // Replicates exactly what the app does when a key is set to open an app:
-    // whole macro blob, then a key entry per control, clears included.
-    guard args.count >= 3, let index = Int(args[1]) else {
-        print("usage: knurl-probe setlaunch <keyIndex> <appName>"); exit(2)
-    }
-    let appName = args.dropFirst(2).joined(separator: " ")
-    let steps = MacroTable.launchSteps(appName: appName)
-    guard let blob = MacroTable.encode([0: steps]) else { print("does not fit"); exit(1) }
-    guard let best = transport.bestCandidate else { print("No device."); exit(1) }
-    if case .failure(let e) = transport.open(best) {
-        print("open failed: \(e.localizedDescription)"); exit(1)
-    }
-
-    let composer = WebHubComposer()
-    let blobWrites = WebHubComposer.macroTableWrites(blob)
-    print("macro: \(steps.count) steps, \(blobWrites.count) blob frames")
-    var failures = 0
-    for report in blobWrites {
-        if case .failure = transport.write(report, channel: .output) { failures += 1 }
-        usleep(15_000)
-    }
-    print("blob write failures: \(failures)")
-
-    // key entries for indices 0...5 — the macro one, the rest cleared
-    for i in 0...5 {
-        guard let action = WebHubComposer.action(forKeyIndex: i) else { continue }
-        let reports = i == index
-            ? composer.macro(action: action, layer: 0, slot: 0)
-            : composer.clear(action: action, layer: 0)
-        for report in reports {
-            if case .failure = transport.write(report, channel: .output) { failures += 1 }
-            usleep(15_000)
-        }
-    }
-    print("total failures: \(failures)")
-    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-    transport.close()
-
 case "access":
     // macOS gates input reports from keyboard-usage devices behind Input
     // Monitoring. Ask the system rather than guessing from silence.

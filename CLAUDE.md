@@ -78,6 +78,10 @@ correct while the firmware does nothing with it. The encoder — `E` in the vend
 bundle — is the only place both facts appear. When a macro writes and reads back
 cleanly but the key does nothing, suspect a value the reader is lenient about.
 
+**Writing the macro table clears the key table.** Blob first, key entries
+after — which is the order `writeToDevice` uses. A probe command that writes a
+blob and only one key entry will appear to wipe the pad.
+
 **Unsigned builds change identity on every rebuild**, so TCC grants never stick.
 This is why press counting was removed rather than shipped as a switch that
 quietly does nothing.

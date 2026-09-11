@@ -6,13 +6,12 @@ import SwiftUI
 import KnurlCore
 
 enum EditorTab: String, CaseIterable, Identifiable {
-    case keys, media, launch, mouse, led
+    case keys, media, mouse, led
     var id: String { rawValue }
     var title: String {
         switch self {
         case .keys: return "Keys"
         case .media: return "Media"
-        case .launch: return "Open app"
         case .mouse: return "Mouse"
         case .led: return "LED"
         }
@@ -21,7 +20,6 @@ enum EditorTab: String, CaseIterable, Identifiable {
         switch self {
         case .keys: return "keyboard"
         case .media: return "play.circle"
-        case .launch: return "arrow.up.forward.app"
         case .mouse: return "computermouse"
         case .led: return "lightbulb"
         }
@@ -64,8 +62,6 @@ final class AppModel: ObservableObject {
     @Published var mediaKey: MediaKey = MediaKey.all[0]
     @Published var mouseButton: MouseButton = .left
     @Published var mouseModifiers: Modifier = .none
-    @Published var launchApp = ""
-    @Published var launchAppIcon: NSImage?
     @Published var isRecording = false { didSet { isRecording ? startRecording() : stopRecording() } }
 
     // MARK: Log
@@ -157,7 +153,6 @@ final class AppModel: ObservableObject {
         guard activeProtocol == .webHub else { return true }
         switch tab {
         case .keys, .media, .led: return true
-        case .launch: return true    // macros make this reachable
         case .mouse: return false    // encoding not worked out for this family
         }
     }
@@ -374,10 +369,6 @@ final class AppModel: ObservableObject {
             mouseButton = button
             mouseModifiers = mods
             editorTab = .mouse
-        case .launch(let app):
-            launchApp = app
-            launchAppIcon = AppModel.icon(forAppNamed: app)
-            editorTab = .launch
         }
     }
 
@@ -391,8 +382,6 @@ final class AppModel: ObservableObject {
             profile[layer, selectedAction] = .media(mediaKey)
         case .mouse:
             profile[layer, selectedAction] = .mouse(button: mouseButton, modifiers: mouseModifiers)
-        case .launch:
-            profile[layer, selectedAction] = launchApp.isEmpty ? .unset : .launch(app: launchApp)
         case .led:
             break   // LED is device-wide, not per control
         }
@@ -530,35 +519,6 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    /// The icon for an app we only know by name, so a saved mapping still shows
-    /// what it opens.
-    static func icon(forAppNamed name: String) -> NSImage? {
-        for root in ["/Applications", "/System/Applications",
-                     NSHomeDirectory() + "/Applications"] {
-            let path = "\(root)/\(name).app"
-            if FileManager.default.fileExists(atPath: path) {
-                return NSWorkspace.shared.icon(forFile: path)
-            }
-        }
-        return nil
-    }
-
-    /// Chooses the app a key should open, and remembers its icon for the editor.
-    func pickLaunchApp() {
-        let panel = NSOpenPanel()
-        panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        panel.allowedContentTypes = [.application]
-        panel.allowsMultipleSelection = false
-        panel.title = "Choose an app to open"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        let name = url.deletingPathExtension().lastPathComponent
-        launchApp = name
-        launchAppIcon = NSWorkspace.shared.icon(forFile: url.path)
-        editorTab = .launch
-        commit()
-    }
-
     // MARK: - Recording
 
     private func startRecording() {
@@ -692,10 +652,6 @@ final class AppModel: ObservableObject {
                 switch source[layer, action] {
                 case .keys(let sequence, _) where sequence.count > 1:
                     steps = MacroTable.steps(for: sequence)
-                case .launch(let app):
-                    steps = MacroTable.launchSteps(appName: app,
-                                                   openDelay: launchPace.openDelay,
-                                                   searchDelay: launchPace.searchDelay)
                 default:
                     continue
                 }
@@ -813,21 +769,6 @@ final class AppModel: ObservableObject {
     /// Which section the window is showing. Held here so the menu bar can send
     /// the user somewhere specific instead of just raising the window.
     @Published var section: PanelSection = .keys
-
-    /// How long a macro waits for the launcher to appear and to finish
-    /// searching. Spotlight and Raycast are not the same speed, and neither is
-    /// one machine and another.
-    enum LaunchPace: String, CaseIterable {
-        case quick, normal, patient
-        var title: String { rawValue.capitalized }
-        var openDelay: UInt16 { self == .quick ? 250 : self == .normal ? 450 : 800 }
-        var searchDelay: UInt16 { self == .quick ? 300 : self == .normal ? 550 : 900 }
-    }
-
-    @Published var launchPace: LaunchPace =
-        LaunchPace(rawValue: UserDefaults.standard.string(forKey: "launchPace") ?? "normal") ?? .normal {
-        didSet { UserDefaults.standard.set(launchPace.rawValue, forKey: "launchPace") }
-    }
 
     /// Bring the window forward when a keypad turns up, so plugging one in is
     /// enough to start working. Off for people who would rather it stayed put.

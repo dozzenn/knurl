@@ -185,24 +185,10 @@ The app reads the key table and the backlight off the keypad whenever it
 connects, so the window shows what the hardware actually holds instead of an
 empty profile.
 
-Shortcuts longer than one keystroke go in the **macro table**: 4096 bytes read
-with `06 0C` and written with `06 0D`, holding sixteen 16-bit pointers followed
-by the steps they point at. The header is 64 bytes and step
-data starts after it. A step is four bytes — `delayLo delayHi flags code` — with
-the kind in the flags' low six bits (3 keyboard, 2 mouse, 4 and 5 scroll), press
-or release in bit 6, and the end of the macro in bit 7. A slot whose pointer is
-`FFFF`, or whose low byte is zero, holds nothing.
-
-Writing the macro table clears the key table, so the key entries have to be
-written after it — which is what saving does. A key entry of type `0x60` carries the slot number in
-`code1`. `06 0F 04` clears every macro.
-
-Knurl rewrites the whole table on every save and hands out slots fresh, so a key
-can never be left pointing at a macro that moved.
-
-A **Hyper** button sits with the modifiers. A Caps Lock remapped to Hyper does
-not send Caps Lock — it sends Control, Option, Shift and Command together — so
-there is nothing to pick from a key list, only that combination.
+The keypad also has a macro table, and Knurl can write it, but no macro has been
+seen to run on this firmware — so a key holds one shortcut, and the app does not
+offer longer ones. The format is in `MacroTable` for anyone who wants to take it
+further.
 
 Mouse actions are not implemented for this family. Rather than showing a tab
 that cannot be written, the editor only offers what the connected keypad can

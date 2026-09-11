@@ -86,18 +86,24 @@ blob and only one key entry will appear to wipe the pad.
 This is why press counting was removed rather than shipped as a switch that
 quietly does nothing.
 
-## Open, not finished
+## Dead end: macros
 
-**Multi-keystroke macros are written but unproven.** The table reaches the
-device correctly — the blob writes, reads back byte for byte, and the key entry
-points at the right slot — but no macro has ever been seen to run. Single
-keystrokes with modifiers work, including all four at once for Hyper, and that
-is the path everything useful has gone through so far.
+**Macros do not run on this hardware, and the path is switched off.** The code
+to write them is still in `MacroTable` and `writeToDevice`, and it is correct as
+far as anything can tell: the blob writes, reads back byte for byte, and the key
+entry points at the right slot. Pressing the key does nothing. Four variations
+were tried on the device, each from evidence rather than guesswork:
 
-Two things are still unchecked: whether the recorder actually builds a sequence
-of more than one keystroke in the editor, and whether the firmware runs a macro
-at all given a key entry whose `code2` and `code3` are zero. Start with the
-first; it is cheaper to test and would explain the symptom on its own.
+- step kind 1, then 3 — the encoder's value for a recorded key step
+- step kind 2 — what the vendor's own hand-built Win+R macro emits
+- `code3 = 1` on the key entry, on the theory that it is a repeat count
+
+None ran. What is left unexplored is `code2` on the key entry, which the vendor's
+editor feeds from a control whose label is not in the JS bundle — the strings are
+fetched at runtime.
+
+`maxKeystrokesPerControl` for WebHub is 1 so that nobody can record a sequence
+that silently does nothing. Raise it only after seeing a macro actually run.
 
 ## Conventions
 

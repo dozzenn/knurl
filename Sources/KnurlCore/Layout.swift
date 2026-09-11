@@ -136,12 +136,12 @@ public enum LayoutLibrary {
             // definition file (6d7b_dcfa.json, "keyboard3n1"): three keys in a
             // row plus one knob, one layer, six stored profiles.
             //
-            // A key entry holds one keystroke, but a key can point at a macro,
-            // so what a key can hold is the macro's length rather than the
-            // entry's. This was 1 while that was still true.
+            // A key entry holds one keystroke. It can point at a macro
+            // instead, but macros do not run on this firmware, so one is what
+            // a key can actually hold.
             name: "3 keys, 1 knob (SIDE-KEYBOARD)",
             products: [(0x6D7B, 0xDCFA)],
-            layerCount: 1, maxCharacters: 16, supportsDelay: false, supportsColor: false, ledModeCount: 6,
+            layerCount: 1, maxCharacters: 1, supportsDelay: false, supportsColor: false, ledModeCount: 6,
             controls: buttons([(1, 5, 22), (2, 27, 22), (3, 49, 22)]) + [knob(1, 74, 8, 42, 42)]
         ),
         KeyboardLayout(

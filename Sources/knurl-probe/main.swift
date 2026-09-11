@@ -350,6 +350,70 @@ case "readmacro":
         }
     }
 
+case "setcombo":
+    // setcombo <keyIndex> <modsHex:usageHex> …
+    //   e.g. setcombo 2 08:04 00:2A   →  ⌘A then Delete
+    // Reads the key table first and writes every entry back, because writing
+    // the macro table clears it.
+    guard args.count >= 3, let index = Int(args[1]) else {
+        print("usage: knurl-probe setcombo <keyIndex> <modsHex:usageHex> …"); exit(2)
+    }
+    var strokes: [KeyStroke] = []
+    for spec in args.dropFirst(2) {
+        let parts = spec.split(separator: ":")
+        guard parts.count == 2,
+              let m = UInt8(parts[0], radix: 16), let u = UInt8(parts[1], radix: 16) else {
+            print("bad spec: \(spec)"); exit(2)
+        }
+        strokes.append(KeyStroke(usage: u, modifiers: Modifier(rawValue: m)))
+    }
+    let steps = MacroTable.steps(for: strokes)
+    guard let blob = MacroTable.encode([0: steps]) else { print("does not fit"); exit(1) }
+    guard let best = transport.bestCandidate else { print("No device."); exit(1) }
+
+    // remember what is on the pad now
+    var existing: [[UInt8]] = []
+    transport.onInputReport = { existing.append($0) }
+    if case .failure(let e) = transport.open(best) {
+        print("open failed: \(e.localizedDescription)"); exit(1)
+    }
+    var table: [UInt8] = []
+    for block in 0..<3 {
+        _ = transport.write(WebHubComposer.keyTableRequest(blockOffset: block * 56, layer: 0),
+                            channel: .output)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+    }
+    for r in existing where r.count > 8 && r.first == 0xAA && r[1] == 8 {
+        table.append(contentsOf: r[8...])
+    }
+    print("read \(table.count / 4) existing entries")
+    transport.onInputReport = nil
+
+    print("macro: \(strokes.count) keystrokes, \(steps.count) steps")
+    for report in WebHubComposer.macroTableWrites(blob) {
+        _ = transport.write(report, channel: .output)
+        usleep(15_000)
+    }
+
+    // put every entry back, with the target pointed at the macro
+    let composer = WebHubComposer()
+    for i in 0..<(table.count / 4) {
+        guard let action = WebHubComposer.action(forKeyIndex: i) else { continue }
+        let entry = Array(table[(i * 4)..<(i * 4 + 4)])
+        let reports: [PadReport]
+        if i == index {
+            reports = composer.macro(action: action, layer: 0, slot: 0)
+        } else if let binding = WebHubComposer.binding(fromEntry: entry) {
+            reports = composer.reports(for: binding, action: action, layer: 0)
+        } else {
+            continue
+        }
+        for report in reports { _ = transport.write(report, channel: .output); usleep(15_000) }
+    }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+    transport.close()
+    print("key index \(index) now runs the macro; the rest were written back")
+
 case "access":
     // macOS gates input reports from keyboard-usage devices behind Input
     // Monitoring. Ask the system rather than guessing from silence.

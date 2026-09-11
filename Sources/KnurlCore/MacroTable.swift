@@ -5,13 +5,13 @@ public struct MacroStep: Equatable, Sendable {
     /// Which namespace `code` belongs to, carried in the low six bits of the
     /// flags byte.
     ///
-    /// Keyboard is 3, not 1. The vendor's reader treats anything that is not
-    /// 2, 4 or 5 as a keyboard step, so a wrong value still decodes as one and
-    /// reads back looking correct — while the firmware, which switches on the
-    /// value, does nothing with it.
+    /// The vendor's own hand-built macro — the one that opens the Windows Run
+    /// dialog — writes its key steps as 2, so that is what the firmware is
+    /// known to run. Its reader is lenient about this byte, which is why a
+    /// wrong value reads back looking correct and does nothing.
     public enum Kind: UInt8, Sendable {
-        case keyboard = 3
-        case mouse = 2
+        case key = 2
+        case keyAlternate = 3
         case scrollVertical = 4
         case scrollHorizontal = 5
     }
@@ -24,7 +24,7 @@ public struct MacroStep: Equatable, Sendable {
     public var action: Action
     public var code: UInt8
 
-    public init(delay: UInt16 = 8, kind: Kind = .keyboard, action: Action, code: UInt8) {
+    public init(delay: UInt16 = 10, kind: Kind = .key, action: Action, code: UInt8) {
         self.delay = delay
         self.kind = kind
         self.action = action
@@ -67,7 +67,7 @@ public enum MacroTable {
     /// Turns a recorded shortcut into the presses and releases that produce it.
     /// Modifiers go down before the key and come up after it, in reverse, which
     /// is what a keyboard does and what applications expect.
-    public static func steps(for stroke: KeyStroke, gap: UInt16 = 8) -> [MacroStep] {
+    public static func steps(for stroke: KeyStroke, gap: UInt16 = 10) -> [MacroStep] {
         let modifiers = modifierUsages(stroke.modifiers)
         var out: [MacroStep] = modifiers.map { MacroStep(delay: gap, action: .down, code: $0) }
         if stroke.usage != 0 {
@@ -80,7 +80,7 @@ public enum MacroTable {
         return out
     }
 
-    public static func steps(for sequence: [KeyStroke], gap: UInt16 = 8) -> [MacroStep] {
+    public static func steps(for sequence: [KeyStroke], gap: UInt16 = 10) -> [MacroStep] {
         sequence.flatMap { steps(for: $0, gap: gap) }
     }
 
@@ -138,7 +138,7 @@ public enum MacroTable {
                 let flags = blob[cursor + 2]
                 // Mirrors the vendor's reader: only 2, 4 and 5 mean anything
                 // else; everything remaining is a keyboard step.
-                let kind = MacroStep.Kind(rawValue: flags & 0x3F) ?? .keyboard
+                let kind = MacroStep.Kind(rawValue: flags & 0x3F) ?? .key
                 let action: MacroStep.Action = (flags >> 6) & 1 == 1 ? .down : .up
                 steps.append(MacroStep(delay: delay, kind: kind, action: action,
                                        code: blob[cursor + 3]))
